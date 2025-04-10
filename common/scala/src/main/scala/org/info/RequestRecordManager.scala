@@ -50,7 +50,7 @@ object RequestRecordManager {
   // "none" 、 "km" 、 "random" 、 "redundancy" 、 "total_voc" 、 "voc" 、 "svoc"
 
   // 最低保留热容器数
-  val leastSaveContainers = 3
+  val leastSaveContainers = 8
 
   // 按分钟分桶存储请求记录，用于记录每个新到请求的表情况
   private val requestBuckets = new ConcurrentHashMap[Long, List[RequestRecord]]().asScala

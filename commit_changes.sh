@@ -11,7 +11,7 @@ fi
 commit_message="$1"
 
 # 进入目标目录
-cd /home/t1/ServerlessDB || { echo "无法进入 /home/t1/ServerlessDB 目录"; exit 1; }
+cd /home/t1/incubator-openwhisk || { echo "无法进入 /home/t1/incubator-openwhisk 目录"; exit 1; }
 
 # 获取当前分支名
 current_branch=$(git rev-parse --abbrev-ref HEAD)
@@ -21,7 +21,7 @@ echo -e "当前所在分支为：$current_branch\n按 Enter 键确认上传本�
 read -r 
 
 # 添加所有更改
-git add OpenWhisk系统代码/incubator-openwhisk
+git add /home/t1/incubator-openwhisk
 
 # 提交更改
 git commit -m "$commit_message"

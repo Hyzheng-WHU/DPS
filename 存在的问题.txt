@@ -1,3 +1,0 @@
-1、dbInfo中有时只有workingTimestamp属性，没有预测执行时间
-2、startInfo中部分条目出现"activationId": "wait",同时invoker执行时无法读取对应的dbName
-3、之前观察到实际分配容器与再startInfo中读取容器不一致的bug，有待再次观察
