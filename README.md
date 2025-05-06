@@ -26,5 +26,5 @@ The key modifications and additions to the original OpenWhisk codebase are as fo
 - **New Components**: Located in `/common/scala/src/main/scala/org/info/`
 - **Modified Scheduler**: Most changes are in `/core/scheduler/src/main/scala/org/apache/openwhisk/core/scheduler/queue/`
 - **Modified Invoker**: Most changes are in `/core/invoker/src/main/scala/org/apache/openwhisk/core/`
-- **Workloads**: Test workloads can be found in `/workloads/`
+- **Workloads**: Test workloads are in `/workloads/`
 - **Experiment Scripts**: Scripts for running experiments are in `/experiment/`
