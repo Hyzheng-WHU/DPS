@@ -489,14 +489,36 @@ object ContainerRemoveManager {
     val allWindowsHaveExcessContainers = requestCounts.forall(count => warmContainerCount + prewarmContainerCount > count)
 
     // 条件2：滑动窗口的请求趋势判断（新增的滑动窗口逻辑）
-    // 检查所有相邻窗口对是否满足：前一个窗口(较新)的请求量不大于后一个窗口(较旧)的请求量
-    var hasDecreasingTrend = true
-    for (i <- 0 until slidingRequestCounts.length - 1) {
-      // 比较相邻窗口：slidingRequestCounts(i)为较新窗口，slidingRequestCounts(i+1)为较旧窗口
-      if (slidingRequestCounts(i) > slidingRequestCounts(i + 1)) {
-        hasDecreasingTrend = false
-      }
-    }
+    // // 检查所有相邻窗口对是否满足：前一个窗口(较新)的请求量不大于后一个窗口(较旧)的请求量
+    // var hasDecreasingTrend = true
+    // for (i <- 0 until slidingRequestCounts.length - 1) {
+    //   // 比较相邻窗口：slidingRequestCounts(i)为较新窗口，slidingRequestCounts(i+1)为较旧窗口
+    //   if (slidingRequestCounts(i) > slidingRequestCounts(i + 1)) {
+    //     hasDecreasingTrend = false
+    //   }
+    // }
+
+    // 条件2：使用线性回归模型拟合请求趋势，斜率小于等于-1才触发
+    // 准备数据用于线性回归：x为窗口索引，y为请求数量
+    val xValues = (0 until numSlidingWindows).map(_.toDouble).toArray
+    val yValues = slidingRequestCounts.map(_.toDouble)
+
+    // 计算线性回归的斜率
+    // 使用最小二乘法计算斜率：slope = (n*sum(xy) - sum(x)*sum(y)) / (n*sum(x^2) - (sum(x))^2)
+    val n = xValues.length
+    val sumX = xValues.sum
+    val sumY = yValues.sum
+    val sumXY = (xValues zip yValues).map { case (x, y) => x * y }.sum
+    val sumXSquare = xValues.map(x => x * x).sum
+
+    val slope = (n * sumXY - sumX * sumY) / (n * sumXSquare - sumX * sumX)
+
+    // 记录斜率值
+    logging.info(this, s"请求趋势的线性拟合斜率: $slope")
+
+    // 只有当斜率小于等于-1时才认为有明显的下降趋势
+    val hasDecreasingTrend = slope <= -1.0
+
 
     // 条件3：最近的时间窗口中没有冷启动或等待启动的请求（保持原逻辑不变）
     val waitAndColdRequestCountLastxSecs = RequestRecordManager.getWaitAndColdRequestCountWithinDuration(now, containerCheckIntervalInSec)
