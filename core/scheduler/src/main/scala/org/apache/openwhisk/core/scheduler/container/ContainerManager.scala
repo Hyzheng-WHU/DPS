@@ -65,118 +65,118 @@ import akka.util.Timeout
 import scala.concurrent.duration._
 
 
-import org.apache.calcite.sql.parser.SqlParser
-import org.apache.calcite.sql.util.SqlBasicVisitor
-import org.apache.calcite.sql.SqlIdentifier
-import org.apache.calcite.sql.SqlCall
-import org.apache.calcite.sql.SqlKind
-import org.apache.calcite.sql.SqlSelect
+// import org.apache.calcite.sql.parser.SqlParser
+// import org.apache.calcite.sql.util.SqlBasicVisitor
+// import org.apache.calcite.sql.SqlIdentifier
+// import org.apache.calcite.sql.SqlCall
+// import org.apache.calcite.sql.SqlKind
+// import org.apache.calcite.sql.SqlSelect
 
 // (implicit logging: Logging)
 
-object SqlTableExtractor {
+// object SqlTableExtractor {
 
-  // 预处理函数，用来将 SQLite 风格 SQL 转换为标准 SQL
-  def preprocessSQL(sql: String): String = {
-    var processedSQL = sql
+//   // 预处理函数，用来将 SQLite 风格 SQL 转换为标准 SQL
+//   def preprocessSQL(sql: String): String = {
+//     var processedSQL = sql
 
-    // 1. 处理 DATE('YYYY-MM-DD') -> DATE 'YYYY-MM-DD'
-    val datePattern = """DATE\('(\d{4}-\d{2}-\d{2})'\)""".r
-    processedSQL = datePattern.replaceAllIn(processedSQL, m => s"DATE '${m.group(1)}'")
+//     // 1. 处理 DATE('YYYY-MM-DD') -> DATE 'YYYY-MM-DD'
+//     val datePattern = """DATE\('(\d{4}-\d{2}-\d{2})'\)""".r
+//     processedSQL = datePattern.replaceAllIn(processedSQL, m => s"DATE '${m.group(1)}'")
 
-    // 注释掉了一些暂时没有在测试语句中出现的内容，如果遇到日志中报错解析 “SQL 失败: Encountered ...”，可以取消注释
-    // // 2. 处理 DATETIME('YYYY-MM-DD HH:MM:SS') -> TIMESTAMP 'YYYY-MM-DD HH:MM:SS'
-    // val datetimePattern = """DATETIME\('(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'\)""".r
-    // processedSQL = datetimePattern.replaceAllIn(processedSQL, m => s"TIMESTAMP '${m.group(1)}'")
+//     // 注释掉了一些暂时没有在测试语句中出现的内容，如果遇到日志中报错解析 “SQL 失败: Encountered ...”，可以取消注释
+//     // // 2. 处理 DATETIME('YYYY-MM-DD HH:MM:SS') -> TIMESTAMP 'YYYY-MM-DD HH:MM:SS'
+//     // val datetimePattern = """DATETIME\('(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'\)""".r
+//     // processedSQL = datetimePattern.replaceAllIn(processedSQL, m => s"TIMESTAMP '${m.group(1)}'")
 
-    // // 3. 处理字符串拼接 a || b -> CONCAT(a, b)
-    // val concatPattern = """(\w+)\s*\|\|\s*(\w+)""".r
-    // processedSQL = concatPattern.replaceAllIn(processedSQL, m => s"CONCAT(${m.group(1)}, ${m.group(2)})")
+//     // // 3. 处理字符串拼接 a || b -> CONCAT(a, b)
+//     // val concatPattern = """(\w+)\s*\|\|\s*(\w+)""".r
+//     // processedSQL = concatPattern.replaceAllIn(processedSQL, m => s"CONCAT(${m.group(1)}, ${m.group(2)})")
 
-    // // 4. 处理 IFNULL(a, b) -> COALESCE(a, b)
-    // val ifNullPattern = """IFNULL\(([^,]+),\s*([^)]+)\)""".r
-    // processedSQL = ifNullPattern.replaceAllIn(processedSQL, m => s"COALESCE(${m.group(1)}, ${m.group(2)})")
+//     // // 4. 处理 IFNULL(a, b) -> COALESCE(a, b)
+//     // val ifNullPattern = """IFNULL\(([^,]+),\s*([^)]+)\)""".r
+//     // processedSQL = ifNullPattern.replaceAllIn(processedSQL, m => s"COALESCE(${m.group(1)}, ${m.group(2)})")
 
-    // // 5. 处理 INSTR(a, b) -> POSITION(b IN a)
-    // val instrPattern = """INSTR\(([^,]+),\s*([^)]+)\)""".r
-    // processedSQL = instrPattern.replaceAllIn(processedSQL, m => s"POSITION(${m.group(2)} IN ${m.group(1)})")
+//     // // 5. 处理 INSTR(a, b) -> POSITION(b IN a)
+//     // val instrPattern = """INSTR\(([^,]+),\s*([^)]+)\)""".r
+//     // processedSQL = instrPattern.replaceAllIn(processedSQL, m => s"POSITION(${m.group(2)} IN ${m.group(1)})")
 
-    // 6. 移除 SQL 语句末尾的分号（如果有）
-    processedSQL = processedSQL.replaceAll(";$", "")
+//     // 6. 移除 SQL 语句末尾的分号（如果有）
+//     processedSQL = processedSQL.replaceAll(";$", "")
 
-    // 返回预处理后的 SQL
-    processedSQL
-  }
+//     // 返回预处理后的 SQL
+//     processedSQL
+//   }
 
-  // 解析并提取 SQL 语句中的表名
-  def extractTables(sql: String)(implicit logging: Logging): List[String] = {
-    // 调用 preprocessSQL() 来处理 SQL 语句中的 DATE() 函数
-    val processedSQL = preprocessSQL(sql)
-    logging.info(this, s"processedSQL: $processedSQL")
+//   // 解析并提取 SQL 语句中的表名
+//   def extractTables(sql: String)(implicit logging: Logging): List[String] = {
+//     // 调用 preprocessSQL() 来处理 SQL 语句中的 DATE() 函数
+//     val processedSQL = preprocessSQL(sql)
+//     logging.info(this, s"processedSQL: $processedSQL")
 
-    // 初始化 SQL Parser 配置
-    val config = SqlParser.Config.DEFAULT
-    val parser = SqlParser.create(processedSQL, config)
+//     // 初始化 SQL Parser 配置
+//     val config = SqlParser.Config.DEFAULT
+//     val parser = SqlParser.create(processedSQL, config)
 
-    try {
-      // 解析预处理后的 SQL 语句
-      val sqlNode = parser.parseQuery()
+//     try {
+//       // 解析预处理后的 SQL 语句
+//       val sqlNode = parser.parseQuery()
 
-      // 使用可变的 ListBuffer 来收集表名
-      val tableNames = scala.collection.mutable.ListBuffer[String]()
+//       // 使用可变的 ListBuffer 来收集表名
+//       val tableNames = scala.collection.mutable.ListBuffer[String]()
 
-      // 引入上下文标识，标记当前是否在 FROM 或 JOIN 子句中
-      var inFromOrJoinContext = false
+//       // 引入上下文标识，标记当前是否在 FROM 或 JOIN 子句中
+//       var inFromOrJoinContext = false
 
-      // 定义一个访问者来提取 SQL 中的表名
-      val visitor = new SqlBasicVisitor[Unit] {
-        override def visit(call: SqlCall): Unit = {
-          call.getKind match {
-            case SqlKind.SELECT =>
-              // 如果是 SELECT 子句，处理它的 FROM 部分
-              val select = call.asInstanceOf[SqlSelect]
-              if (select.getFrom != null) {
-                // logging.info(this, s"FROM clause content: ${select.getFrom.toString}")
-                inFromOrJoinContext = true
-                select.getFrom.accept(this) // 只处理 FROM 子句
-                inFromOrJoinContext = false
-              }
-            case SqlKind.JOIN =>
-              // 如果是 JOIN 子句，递归处理
-              inFromOrJoinContext = true
-              call.getOperandList.forEach(operand => if (operand != null) operand.accept(this))
-              inFromOrJoinContext = false
-            case SqlKind.IDENTIFIER =>
-              // 处理逗号分隔的多表情况
-              call.getOperandList.forEach(operand => if (operand != null) operand.accept(this))
-            case _ =>
-              super.visit(call) // 继续遍历其他子节点
-          }
-        }
+//       // 定义一个访问者来提取 SQL 中的表名
+//       val visitor = new SqlBasicVisitor[Unit] {
+//         override def visit(call: SqlCall): Unit = {
+//           call.getKind match {
+//             case SqlKind.SELECT =>
+//               // 如果是 SELECT 子句，处理它的 FROM 部分
+//               val select = call.asInstanceOf[SqlSelect]
+//               if (select.getFrom != null) {
+//                 // logging.info(this, s"FROM clause content: ${select.getFrom.toString}")
+//                 inFromOrJoinContext = true
+//                 select.getFrom.accept(this) // 只处理 FROM 子句
+//                 inFromOrJoinContext = false
+//               }
+//             case SqlKind.JOIN =>
+//               // 如果是 JOIN 子句，递归处理
+//               inFromOrJoinContext = true
+//               call.getOperandList.forEach(operand => if (operand != null) operand.accept(this))
+//               inFromOrJoinContext = false
+//             case SqlKind.IDENTIFIER =>
+//               // 处理逗号分隔的多表情况
+//               call.getOperandList.forEach(operand => if (operand != null) operand.accept(this))
+//             case _ =>
+//               super.visit(call) // 继续遍历其他子节点
+//           }
+//         }
 
 
-        override def visit(identifier: SqlIdentifier): Unit = {
-          // 只在 FROM 或 JOIN 子句中时，认为该标识符是表名
-          if (identifier.names.size == 1 && inFromOrJoinContext) {
-            tableNames += identifier.toString
-          }
-        }
-      }
+//         override def visit(identifier: SqlIdentifier): Unit = {
+//           // 只在 FROM 或 JOIN 子句中时，认为该标识符是表名
+//           if (identifier.names.size == 1 && inFromOrJoinContext) {
+//             tableNames += identifier.toString
+//           }
+//         }
+//       }
 
-      // 递归访问 SQL AST 节点
-      sqlNode.accept(visitor)
+//       // 递归访问 SQL AST 节点
+//       sqlNode.accept(visitor)
 
-      // 转换为不可变的 List 并返回
-      logging.info(this, s"sql: ${sql}")
-      logging.info(this, s"涉及的表为: ${tableNames}")
-      tableNames.toList.distinct
-    } catch {
-      case e: Exception =>
-        logging.error(this, s"解析 SQL 失败: ${e.getMessage}")
-        List.empty
-    }
-  }
-}
+//       // 转换为不可变的 List 并返回
+//       logging.info(this, s"sql: ${sql}")
+//       logging.info(this, s"涉及的表为: ${tableNames}")
+//       tableNames.toList.distinct
+//     } catch {
+//       case e: Exception =>
+//         logging.error(this, s"解析 SQL 失败: ${e.getMessage}")
+//         List.empty
+//     }
+//   }
+// }
 
 
 
@@ -814,11 +814,15 @@ object ContainerManager {
 
   // 需要分别在class与object下都定义这个函数
   def extractTableNames(sql: String): List[String] = {
+    // 先去除SQL注释，避免注释中的内容被误识别
+    val sqlWithoutLineComments = sql.replaceAll("(?m)--.*$", "")
+    val cleanedSql = sqlWithoutLineComments.replaceAll("(?s)/\\*.*?\\*/", "")
+
     // 改进后的正则表达式，支持跨行且能够正确处理逗号分隔的多个表
     val tableNamePattern: Regex = """(?is)(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_\.]*(?:\s*,\s*[a-zA-Z_][a-zA-Z0-9_\.]*)*)""".r
 
     // 使用正则表达式查找所有匹配的表名组
-    val matches = tableNamePattern.findAllIn(sql).toList
+    val matches = tableNamePattern.findAllIn(cleanedSql).toList
 
     // 初始化一个空的表名列表
     var tables: List[String] = List()

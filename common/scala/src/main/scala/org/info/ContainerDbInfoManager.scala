@@ -113,7 +113,7 @@ case class ContainerDbInfo(activationId: String,
                           state: String, // 容器当前状态，有 warm 、loading 、working 三种状态
                           updateStateTimestamp: Option[Double], // 容器进入 working 状态的时间戳，用于计算容器已经进行SQL的时间
                           predictWorkingTime: Option[Double],       // 预测SQL执行时间，以秒为单位
-                          dbSizeLastRecord: Double, // 上次记录时，对应db文件的大小
+                          dbSizeLastRecord: Double, // 上次记录时，对应db文件的大小（MB）
                           invoker: String, // 容器所在的invoker
                           useCount: Int, // 容器使用次数
                           createTimestamp: Double // 创建时间戳
@@ -281,7 +281,13 @@ object ContainerDbInfoManager {
       // 获取当前文件大小
       val currentDbSize = Try {
         val filePath = Paths.get(dbPath)
-        if (Files.exists(filePath)) Files.size(filePath).toDouble else entry.dbSizeLastRecord
+        // if (Files.exists(filePath)) Files.size(filePath).toDouble else entry.dbSizeLastRecord
+        if (Files.exists(filePath)) {
+          val sizeInBytes = Files.size(filePath)
+          (sizeInBytes.toDouble / (1024 * 1024)) // 转换为MB
+        } else {
+          entry.dbSizeLastRecord
+        }
       }.getOrElse(lastDbSize)
 
       if (lastDbSize != 0 && entry.state == "loading") {
@@ -293,7 +299,7 @@ object ContainerDbInfoManager {
         // 更新增长速率映射
         if (growthRate > 0) {
           dbSizeGrowthRateMap = dbSizeGrowthRateMap.updated(containerId, growthRate)
-          // logging.info(this, s"容器 $containerId 的增长速率更新为 $growthRate 字节/秒")
+          // logging.info(this, s"容器 $containerId 的增长速率更新为 $growthRate MB/s")
         }
       }
 
