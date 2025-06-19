@@ -56,7 +56,7 @@ whisk:
     timeouts:
       # 热容器保存时间
       # idleContainer: "{{ containerProxy_timeouts_idleContainer | default('10 minutes') }}"
-      idleContainer: "{{ containerProxy_timeouts_idleContainer | default('10 minutes') }}"
+      idleContainer: "{{ containerProxy_timeouts_idleContainer | default('1 minutes') }}"
       # pauseGrace: "{{ containerProxy_timeouts_pauseGrace | default('10 seconds') }}"
       pauseGrace: "{{ containerProxy_timeouts_pauseGrace | default('0 seconds') }}"
       keepingDuration: "{{ containerProxy_timeouts_keepingDuration | default('10 minutes') }}"
@@ -228,8 +228,8 @@ invoker:
     become: "{{ invoker_docker_become | default(false) }}"
     runcdir: "{{ invoker_runcdir | default('/run/docker/runtime-runc/moby') }}"
     volumes: "{{ invoker_docker_volumes | default([]) }}"
-  # loglevel: "{{ invoker_loglevel | default(whisk_loglevel) | default('INFO') }}"
-  loglevel: "{{ invoker_loglevel | default(whisk_loglevel) | default('ERROR') }}"
+  loglevel: "{{ invoker_loglevel | default(whisk_loglevel) | default('INFO') }}"
+  # loglevel: "{{ invoker_loglevel | default(whisk_loglevel) | default('ERROR') }}"
   jmxremote:
     jvmArgs: "{% if inventory_hostname in groups['invokers'] %}
     {{ jmx.jvmCommonArgs }} -Djava.rmi.server.hostname={{ invokerHostname }} -Dcom.sun.management.jmxremote.rmi.port={{ jmx.rmiBasePortInvoker + groups['invokers'].index(inventory_hostname) }} -Dcom.sun.management.jmxremote.port={{ jmx.basePortInvoker + groups['invokers'].index(inventory_hostname) }}
@@ -541,8 +541,8 @@ scheduler:
       bindPort: 3551
       # at this moment all schedulers are seed nodes
       seedNodes: "{{ groups['schedulers'] | map('extract', hostvars, 'ansible_host') | list }}"
-  # loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('INFO') }}"
-  loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('ERROR') }}"
+  loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('INFO') }}"
+  # loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('ERROR') }}"
   extraEnv: "{{ scheduler_extraEnv | default({}) }}"
   dataManagementService:
     retryInterval: "{{ scheduler_dataManagementService_retryInterval | default('1 second') }}"
