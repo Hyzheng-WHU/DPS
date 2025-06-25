@@ -541,8 +541,9 @@ scheduler:
       bindPort: 3551
       # at this moment all schedulers are seed nodes
       seedNodes: "{{ groups['schedulers'] | map('extract', hostvars, 'ansible_host') | list }}"
-  loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('INFO') }}"
+  # loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('INFO') }}"
   # loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('ERROR') }}"
+  loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('WARN') }}"
   extraEnv: "{{ scheduler_extraEnv | default({}) }}"
   dataManagementService:
     retryInterval: "{{ scheduler_dataManagementService_retryInterval | default('1 second') }}"

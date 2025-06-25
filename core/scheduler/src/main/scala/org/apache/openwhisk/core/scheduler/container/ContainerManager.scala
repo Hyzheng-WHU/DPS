@@ -403,6 +403,7 @@ class ContainerManager(jobManagerFactory: ActorRefFactory => ActorRef,
           logging.info(this, s"receive message WatchEndpointInserted : case `warmKey`, key:$key")
           warmedContainers += key
           logging.info(this, s"warmedContainers after += :$warmedContainers")
+          logging.warn(this, s"当前热容器数: ${warmedContainers.size}")
 
           // 获取路径中最后的部分，即 containerId
           val containerId = key.split("/").last 

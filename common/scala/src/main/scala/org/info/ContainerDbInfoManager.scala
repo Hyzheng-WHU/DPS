@@ -497,7 +497,7 @@ object ContainerDbInfoManager {
             logging.info(this, s"activationId: $activationId, creationId: $creationId, containerId: $containerId")
             cachedDbInfo - creationId + (containerId -> updatedInfo) // 删除旧条目并添加新条目
           case None =>
-            logging.warn(this, s"No dbInfo entry for creationId: $creationId. Maybe warm start?")
+            logging.info(this, s"No dbInfo entry for creationId: $creationId. Maybe warm start?")
             cachedDbInfo
         }
         // logging.info(this, s"Updated activationId and containerId, current cache: $cachedDbInfo")

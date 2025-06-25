@@ -79,7 +79,8 @@ def main(args):
     
     # 解析参数
     data_file = args.get("data_file")
-    data_path = f"/db/remote_db/data/{data_file}/parquet/"
+    # data_path = f"/db/remote_db/data/{data_file}/parquet/"
+    data_path = f"/db/local_data/{data_file}/parquet/"
     
     db_file = args.get("db_file")
     db_path = f"/db/{db_file}"
@@ -91,20 +92,15 @@ def main(args):
     if sql_query_provided:
         sql_query = sql_query_provided
         sql_source = "sql_query"
-        read_time = 0
     else:
         sql_query_path = f"/sql/{sql_file}"
-        read_t1 = time.time()
         with open(sql_query_path, "r") as f:
             sql_query = f.read()
-        read_time = time.time() - read_t1
         sql_source = "sql_file"
 
     # 连接数据库
-    conn_t1 = time.time()
     conn = safe_connect_duckdb(db_path)
     conn = optimize_duckdb_connection(conn)
-    conn_time = time.time() - conn_t1
     
     table_names = extract_table_names(sql_query)
     table_import_times = {}
@@ -135,22 +131,18 @@ def main(args):
     
     # 执行SQL查询
     sql_t1 = time.time()
-    result = conn.execute(sql_query).fetchone()  # 只获取一行结果
+    result = conn.sql(sql_query).fetchone()  # 只获取一行结果
+    # conn.sql(sql_query)
     sql_time = time.time() - sql_t1
     print(f"SQL executed, time: {sql_time:.2f}s")
     
     # 关闭连接
-    close_t1 = time.time()
     conn.close()
-    close_time = time.time() - close_t1
 
     return {
         "executed_sql_source": sql_source,
         "sql_file": sql_file,
-        "read_time": read_time,
-        "conn_time": conn_time,
         "sql_time": sql_time,
-        "close_time": close_time,
         "table_import_times": table_import_times,
-        "result": result  # 只返回一行结果
+        # "result": result  # 只返回一行结果
     }

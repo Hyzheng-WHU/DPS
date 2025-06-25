@@ -91,8 +91,8 @@ def safe_connect_duckdb(db_path):
 
 def main(args):
     data_file = args.get("data_file")
-    data_path = f"/db/remote_db/data/{data_file}/parquet/"
-    # data_path = f"/db/local_data/{data_file}/parquet/"
+    # data_path = f"/db/remote_db/data/{data_file}/parquet/"
+    data_path = f"/db/local_data/{data_file}/parquet/"
     print(f"data_path: {data_path}")
     db_file = args.get("db_file")
     db_path = f"/db/{db_file}"

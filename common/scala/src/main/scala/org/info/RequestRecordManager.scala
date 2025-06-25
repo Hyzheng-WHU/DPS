@@ -32,8 +32,8 @@ case class RequestRecord(
 // 请求记录工具函数
 object RequestRecordManager {
   // 采样时间窗口参数
-  val containerCheckIntervalInSec = 6
-  val totalTimeWindowInSec = 18
+  val containerCheckIntervalInSec =3
+  val totalTimeWindowInSec = 9
 
   // 判定请求趋势时，滑动时间窗口参数
   val slidingWindowSizeInSec = 60  // 时间窗口大小（单位：秒）
@@ -354,11 +354,13 @@ object ContainerRemoveManager {
     )
 
     // 向日志中记录本次的参数配置
-    logging.error(this, s"主动回收策略: ${removeStrategy}")
-    logging.error(this, s"采样比例数组: ${samplingRatios.mkString(", ")}")
-    logging.error(this, s"容器检查间隔: $containerCheckIntervalInSec s")
-    logging.error(this, s"总时间窗口大小: $totalTimeWindowInSec s")
-    logging.error(this, s"最低保留热容器数: $leastSaveContainers")
+    logging.warn(this, s"主动回收策略: ${removeStrategy}")
+    logging.warn(this, s"采样比例数组: ${samplingRatios.mkString(", ")}")
+    logging.warn(this, s"容器检查间隔: $containerCheckIntervalInSec s")
+    logging.warn(this, s"总时间窗口大小: $totalTimeWindowInSec s")
+    logging.warn(this, s"最低保留热容器数: $leastSaveContainers")
+    logging.warn(this, s"滑动窗口大小: $slidingWindowSizeInSec s, 滑动步长: $slidingStepSizeInSec s, 触发阈值: $triggerThreshold")
+
   }
 
   // 启动服务，接收并记录由invoker传来的invoker IP
@@ -398,7 +400,7 @@ object ContainerRemoveManager {
 
     // 热容器数小于最低保留热容器数，直接返回
     if (warmContainers.length <= leastSaveContainers) {
-      logging.info(this, s"热容器数量 ${warmContainers.length} 小于等于最低保留热容器数 ${leastSaveContainers}，跳过移除操作")
+      logging.debug(this, s"热容器数量 ${warmContainers.length} 小于等于最低保留热容器数 ${leastSaveContainers}，跳过移除操作")
       return
     }
 
@@ -489,35 +491,31 @@ object ContainerRemoveManager {
     val allWindowsHaveExcessContainers = requestCounts.forall(count => warmContainerCount + prewarmContainerCount > count)
 
     // 条件2：滑动窗口的请求趋势判断（新增的滑动窗口逻辑）
-    // // 检查所有相邻窗口对是否满足：前一个窗口(较新)的请求量不大于后一个窗口(较旧)的请求量
-    // var hasDecreasingTrend = true
-    // for (i <- 0 until slidingRequestCounts.length - 1) {
-    //   // 比较相邻窗口：slidingRequestCounts(i)为较新窗口，slidingRequestCounts(i+1)为较旧窗口
-    //   if (slidingRequestCounts(i) > slidingRequestCounts(i + 1)) {
-    //     hasDecreasingTrend = false
-    //   }
-    // }
+    // 检查所有相邻窗口对是否满足：前一个窗口(较新)的请求量不大于后一个窗口(较旧)的请求量
+    var hasDecreasingTrend = true
+    for (i <- 0 until slidingRequestCounts.length - 1) {
+      // 比较相邻窗口：slidingRequestCounts(i)为较新窗口，slidingRequestCounts(i+1)为较旧窗口
+      if (slidingRequestCounts(i) > slidingRequestCounts(i + 1)) {
+        hasDecreasingTrend = false
+      }
+    }
 
-    // 条件2：使用线性回归模型拟合请求趋势，斜率小于等于-1才触发
-    // 准备数据用于线性回归：x为窗口索引，y为请求数量
-    val xValues = (0 until numSlidingWindows).map(_.toDouble).toArray
-    val yValues = slidingRequestCounts.map(_.toDouble)
-
-    // 计算线性回归的斜率
-    // 使用最小二乘法计算斜率：slope = (n*sum(xy) - sum(x)*sum(y)) / (n*sum(x^2) - (sum(x))^2)
-    val n = xValues.length
-    val sumX = xValues.sum
-    val sumY = yValues.sum
-    val sumXY = (xValues zip yValues).map { case (x, y) => x * y }.sum
-    val sumXSquare = xValues.map(x => x * x).sum
-
-    val slope = (n * sumXY - sumX * sumY) / (n * sumXSquare - sumX * sumX)
-
-    // 记录斜率值
-    logging.info(this, s"请求趋势的线性拟合斜率: $slope")
-
-    // 只有当斜率小于等于-1时才认为有明显的下降趋势
-    val hasDecreasingTrend = slope <= -1.0
+    // // 条件2：使用线性回归模型拟合请求趋势，斜率小于等于-1才触发
+    // // 准备数据用于线性回归：x为窗口索引，y为请求数量
+    // val xValues = (0 until numSlidingWindows).map(_.toDouble).toArray
+    // val yValues = slidingRequestCounts.map(_.toDouble)
+    // // 计算线性回归的斜率
+    // // 使用最小二乘法计算斜率：slope = (n*sum(xy) - sum(x)*sum(y)) / (n*sum(x^2) - (sum(x))^2)
+    // val n = xValues.length
+    // val sumX = xValues.sum
+    // val sumY = yValues.sum
+    // val sumXY = (xValues zip yValues).map { case (x, y) => x * y }.sum
+    // val sumXSquare = xValues.map(x => x * x).sum
+    // val slope = (n * sumXY - sumX * sumY) / (n * sumXSquare - sumX * sumX)
+    // // 记录斜率值
+    // logging.info(this, s"请求趋势的线性拟合斜率: $slope")
+    // // 只有当斜率小于等于-1时才认为有明显的下降趋势
+    // val hasDecreasingTrend = slope <= -1.0
 
 
     // 条件3：最近的时间窗口中没有冷启动或等待启动的请求（保持原逻辑不变）
@@ -547,7 +545,7 @@ object ContainerRemoveManager {
       }
       // 更新全局计数器
       proactiveRemovedContainerCount += removedCount
-      logging.error(this, s"当前累计主动移除的容器数量: $proactiveRemovedContainerCount")
+      logging.info(this, s"当前累计主动移除的容器数量: $proactiveRemovedContainerCount")
     } else {
       logging.info(this, "当前热容器数量合理")
     }
@@ -687,11 +685,11 @@ object ContainerRemoveManager {
       containerOrder,
       containerSizes
     )
-    logging.error(this, s"匹配成功: $matchedPairs, 未匹配的容器: $unmatchedContainers")
+    logging.info(this, s"匹配成功: $matchedPairs, 未匹配的容器: $unmatchedContainers")
 
     // 获取所有warm容器
     val allWarmContainers = containers.filter(_.state == "warm")
-    logging.error(this, s"当前系统中共有 ${containers.size} 个容器，其中热容器数量: ${allWarmContainers.size}")
+    logging.info(this, s"当前系统中共有 ${containers.size} 个容器，其中热容器数量: ${allWarmContainers.size}")
     
     // 获取匹配成功的warm容器
     val matchedWarmContainers = matchedPairs
@@ -707,7 +705,7 @@ object ContainerRemoveManager {
     // 安全检查：确保我们不会试图保留比未匹配容器更多的容器
     val actualAdditionalToKeep = Math.min(additionalWarmToKeep, unmatchedContainers.size)
     
-    logging.error(this, s"匹配的warm容器数: $matchedWarmCount, 需额外保留的warm容器数: $actualAdditionalToKeep (原始计算: $additionalWarmToKeep)")
+    logging.info(this, s"匹配的warm容器数: $matchedWarmCount, 需额外保留的warm容器数: $actualAdditionalToKeep (原始计算: $additionalWarmToKeep)")
 
     // 从未匹配容器中找出warm容器
     val unmatchedWarmContainers = unmatchedContainers
@@ -737,47 +735,47 @@ object ContainerRemoveManager {
     // 输出一些日志，包括容器内表的信息等
     {
       // 输出所有容器的信息，方便调试
-      logging.error(this, "==== Debug Information: 所有容器 ====")
+      logging.info(this, "==== Debug Information: 所有容器 ====")
       containers.foreach { container =>
         val tablesInfo = container.tables.mkString(", ")
         val dbSizeInfo = Option(container.dbSizeLastRecord).getOrElse(0L)
-        logging.error(this, s"Container ID: ${container.containerId}, State: ${container.state}, DbSize: $dbSizeInfo, Tables: [$tablesInfo]")
+        logging.info(this, s"Container ID: ${container.containerId}, State: ${container.state}, DbSize: $dbSizeInfo, Tables: [$tablesInfo]")
       }
 
       // 输出决定移除的容器的信息
       if (warmContainersToRemove.nonEmpty) {
-        logging.error(this, "==== Debug Information: 容器决策 ====")
+        logging.info(this, "==== Debug Information: 容器决策 ====")
         
         // 输出匹配成功的容器
         matchedWarmContainers.foreach { container =>
           val tablesInfo = container.tables.mkString(", ")
           val dbSizeInfo = Option(container.dbSizeLastRecord).getOrElse(0L)
-          logging.error(this, s"匹配保留 -> Container ID: ${container.containerId}, DbSize: $dbSizeInfo, Tables: [$tablesInfo]")
+          logging.info(this, s"匹配保留 -> Container ID: ${container.containerId}, DbSize: $dbSizeInfo, Tables: [$tablesInfo]")
         }
         
         // 输出因大小而额外保留的容器
         warmContainersToKeep.foreach { container =>
           val tablesInfo = container.tables.mkString(", ")
           val dbSizeInfo = Option(container.dbSizeLastRecord).getOrElse(0L)
-          logging.error(this, s"大小保留 -> Container ID: ${container.containerId}, DbSize: $dbSizeInfo, Tables: [$tablesInfo]")
+          logging.info(this, s"大小保留 -> Container ID: ${container.containerId}, DbSize: $dbSizeInfo, Tables: [$tablesInfo]")
         }
         
         // 输出将被移除的容器
         warmContainersToRemove.foreach { container =>
           val tablesInfo = container.tables.mkString(", ")
           val dbSizeInfo = Option(container.dbSizeLastRecord).getOrElse(0L)
-          logging.error(this, s"移除 -> Container ID: ${container.containerId}, DbSize: $dbSizeInfo, Tables: [$tablesInfo]")
+          logging.info(this, s"移除 -> Container ID: ${container.containerId}, DbSize: $dbSizeInfo, Tables: [$tablesInfo]")
         }
 
         // 输出未移除的非warm容器的信息
         val nonWarmContainers = containers.filter(_.state != "warm")
         nonWarmContainers.foreach { container =>
           val tablesInfo = container.tables.mkString(", ")
-          logging.error(this, s"非warm -> Container ID: ${container.containerId}, State: ${container.state}, Tables: [$tablesInfo]")
+          logging.info(this, s"非warm -> Container ID: ${container.containerId}, State: ${container.state}, Tables: [$tablesInfo]")
         }
         
-        logging.error(this, s"总结: 总热容器数: ${allWarmContainers.size}, 移除后剩余热容器数: ${allWarmContainers.size - warmContainersToRemove.size}")
-        logging.error(this, "=====================================")
+        logging.info(this, s"总结: 总热容器数: ${allWarmContainers.size}, 移除后剩余热容器数: ${allWarmContainers.size - warmContainersToRemove.size}")
+        logging.info(this, "=====================================")
       }
     }
     
@@ -795,7 +793,7 @@ object ContainerRemoveManager {
 
     // 记录完成信息
     val removedCount = warmContainersToRemove.size
-    logging.error(this, s"KM 移除了 ${removedCount} 个热容器, 剩余热容器数: ${allWarmContainers.size - removedCount}")
+    logging.info(this, s"KM 移除了 ${removedCount} 个热容器, 剩余热容器数: ${allWarmContainers.size - removedCount}")
     removedCount
   }
 
@@ -1653,7 +1651,7 @@ object ContainerRemoveManager {
       case Success(response) =>
         logging.info(this, s"成功发送移除请求, 容器ID: $containerIdToRemove")
       case Failure(exception) =>
-        logging.error(this, s"发送移除请求失败, 容器ID: $containerIdToRemove, 错误信息: ${exception.getMessage}")
+        logging.info(this, s"发送移除请求失败, 容器ID: $containerIdToRemove, 错误信息: ${exception.getMessage}")
     }
   }
 
@@ -1671,7 +1669,7 @@ object KM{
   def buildCostMatrix(requests: List[List[String]], containers: List[ContainerDbInfo])(implicit logging: Logging): (Array[Array[Double]], List[String]) = {
     val n = requests.length // 请求数
     val m = containers.length // 容器数
-    logging.error(this, s"正在构造代价矩阵，请求数: $n 总容器数: $m")
+    logging.info(this, s"正在构造代价矩阵，请求数: $n 总容器数: $m")
 
     val containerOrder = containers.map(_.containerId) // 容器ID的顺序
     val validContainers = scala.collection.mutable.ArrayBuffer[String]() // 执行期间未变化的容器ID列表
@@ -1683,7 +1681,7 @@ object KM{
     for (i <- requests.indices) {
       val tablesNeeded = requests(i)
       val costs = TimePredictor.predictWaitTime(tablesNeeded) // 调用预测时间
-      logging.error(this, s"Request $i costs: $costs")
+      logging.info(this, s"Request $i costs: $costs")
 
       // 填充代价矩阵
       for ((containerId, timeCost, _) <- costs) {
@@ -1711,8 +1709,8 @@ object KM{
     }
     
     // 打印完整的代价矩阵
-    logging.error(this, s"原始 Cost matrix(值为代价，越小越匹配):")
-    finalMatrix.foreach(row => logging.error(this, row.mkString(" ")))
+    logging.info(this, s"原始 Cost matrix(值为代价，越小越匹配):")
+    finalMatrix.foreach(row => logging.info(this, row.mkString(" ")))
 
     (finalMatrix, validContainers.toList)
   }
@@ -1759,14 +1757,14 @@ object KM{
 
       // 为第一个请求的所有容器输出详细权重计算
       if (i == 0) {
-        logging.error(this, s"请求0-容器$j: 原始代价=${costMatrix(i)(j)}, 容器大小=${containerSizes(j)}, " +
+        logging.info(this, s"请求0-容器$j: 原始代价=${costMatrix(i)(j)}, 容器大小=${containerSizes(j)}, " +
           s"容器大小权重=${sizeWeight}, 转换后代价=${transformedCostMatrix(i)(j)}")
       }
     }
 
     // 打印转换后的代价矩阵
-    logging.error(this, "转换后的代价矩阵(加入容器大小权重)(值为收益，越大越匹配):")
-    transformedCostMatrix.foreach(row => logging.error(this, row.map(v => f"$v%.6f").mkString(" ")))
+    logging.info(this, "转换后的代价矩阵(加入容器大小权重)(值为收益，越大越匹配):")
+    transformedCostMatrix.foreach(row => logging.info(this, row.map(v => f"$v%.6f").mkString(" ")))
   
     
     // 初始化标号

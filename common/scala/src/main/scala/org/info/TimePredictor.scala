@@ -81,7 +81,7 @@ object TimePredictor {
   val TargetBenchmark = Tpch1gTableSize
 
   def initWaitingTimeRecorder()(implicit logging: Logging): Unit = {
-    logging.error(this, s"调度器考虑的容器状态列表: $ConsideredStates")
+    logging.warn(this, s"调度器考虑的容器状态列表: $ConsideredStates")
     logging.info(this, "正在初始化等待时间记录器...")
     
     val file = new File(waitingTimeFilePath)
@@ -412,9 +412,9 @@ object TimePredictor {
                 predictWorkingTime <- predictWorkingTimeOpt
               } yield {
                 val timeLeft = predictWorkingTime - elapsedTime
-                if (timeLeft < 0) {
-                  logging.warn(this, s"Remaining work time for container $containerId is negative: $timeLeft ms.")
-                }
+                // if (timeLeft < - 10000) {
+                //   logging.warn(this, s"Remaining work time for container $containerId is negative: $timeLeft ms.")
+                // }
                 val remainingWorkTime = math.max(timeLeft, 0.0) // 确保剩余时间非负
 
                 // 计算总等待时间并返回
