@@ -35,50 +35,60 @@ object TimePredictor {
   val containerReturnTimeCost = 0.5
 
   // 假设每个实例的带宽为定值(MByte/s)
-  // val defaultBandwidthBps: Long = 5000000
+  val defaultBandwidthBps: Long = 14596101L
 
   // 定义表大小的Map，单位为Byte
-  val Tpch1gTableSize: Map[String, Long] = Map(
-    "customer" -> 24196144L,
-    "lineitem" -> 753862072L,
-    "nation"   -> 2199L,
-    "orders"   -> 170452161L,
-    "partsupp" -> 118184616L,
-    "part"     -> 23935125L,
-    "region"   -> 384L,
-    "supplier" -> 1399184L
+  // val Tpch1gTableSize: Map[String, Long] = Map(
+  //   "customer" -> 24196144L,
+  //   "lineitem" -> 753862072L,
+  //   "nation"   -> 2199L,
+  //   "orders"   -> 170452161L,
+  //   "partsupp" -> 118184616L,
+  //   "part"     -> 23935125L,
+  //   "region"   -> 384L,
+  //   "supplier" -> 1399184L
+  // )
+
+  // val Tpcds1gTableSize: Map[String, Long] = Map(
+  //   "call_center" -> 1888L,
+  //   "catalog_page" -> 1633796L,
+  //   "catalog_returns" -> 31750651L,
+  //   "catalog_sales" -> 294263819L,
+  //   "customer_address" -> 5392526L,
+  //   "customer_demographics" -> 80660096L,
+  //   "customer" -> 13203896L,
+  //   "date_dim" -> 10317438L,
+  //   "dbgen_version" -> 111L,
+  //   "household_demographics" -> 151653L,
+  //   "income_band" -> 328L,
+  //   "inventory" -> 236495557L,
+  //   "item" -> 5108290L,
+  //   "promotion" -> 37135L,
+  //   "reason" -> 1339L,
+  //   "ship_mode" -> 1113L,
+  //   "store_returns" -> 81074942L,
+  //   "store_sales" -> 386079402L,
+  //   "store" -> 3162L,
+  //   "time_dim" -> 5107780L,
+  //   "warehouse" -> 586L,
+  //   "web_page" -> 5759L,
+  //   "web_returns" -> 19470799L,
+  //   "web_sales" -> 145326548L,
+  //   "web_site" -> 8726L
+  // )
+
+  val Tpch5gParquetSize: Map[String, Long] = Map(
+    "customer" -> 51904512L,
+    "lineitem" -> 854601728L,
+    "nation"   -> 1060864L,
+    "orders"   -> 217329664L,
+    "partsupp" -> 176959488L,
+    "part"     -> 25440256L,
+    "region"   -> 1060864L,
+    "supplier" -> 4206592L,
   )
 
-  val Tpcds1gTableSize: Map[String, Long] = Map(
-    "call_center" -> 1888L,
-    "catalog_page" -> 1633796L,
-    "catalog_returns" -> 31750651L,
-    "catalog_sales" -> 294263819L,
-    "customer_address" -> 5392526L,
-    "customer_demographics" -> 80660096L,
-    "customer" -> 13203896L,
-    "date_dim" -> 10317438L,
-    "dbgen_version" -> 111L,
-    "household_demographics" -> 151653L,
-    "income_band" -> 328L,
-    "inventory" -> 236495557L,
-    "item" -> 5108290L,
-    "promotion" -> 37135L,
-    "reason" -> 1339L,
-    "ship_mode" -> 1113L,
-    "store_returns" -> 81074942L,
-    "store_sales" -> 386079402L,
-    "store" -> 3162L,
-    "time_dim" -> 5107780L,
-    "warehouse" -> 586L,
-    "web_page" -> 5759L,
-    "web_returns" -> 19470799L,
-    "web_sales" -> 145326548L,
-    "web_site" -> 8726L
-  )
-
-  // val TargetBenchmark = Tpcds1gTableSize
-  val TargetBenchmark = Tpch1gTableSize
+  val TargetBenchmark = Tpch5gParquetSize
 
   def initWaitingTimeRecorder()(implicit logging: Logging): Unit = {
     logging.warn(this, s"调度器考虑的容器状态列表: $ConsideredStates")
@@ -218,7 +228,7 @@ object TimePredictor {
    */
   def predictDownloadTime(neededTables: List[String], existingTables: List[String], containerId: String = "coldStart")(implicit logging: Logging): Double = {
     // 添加默认带宽值
-    val defaultBandwidth: Long = 5000000L // 5MB/s as default
+    // val defaultBandwidth: Long = 5000000L // 5MB/s as default
 
     // val bandwidthBps: Long = ContainerDbInfoManager.dbSizeGrowthRateMap
     //   .get(containerId)
@@ -231,12 +241,12 @@ object TimePredictor {
 
     val bandwidthBps: Long = {
       val calculatedBandwidth = if (ContainerDbInfoManager.dbSizeGrowthRateMap.isEmpty) {
-        defaultBandwidth
+        TimePredictor.defaultBandwidthBps
       } else {
         (ContainerDbInfoManager.dbSizeGrowthRateMap.values.sum / ContainerDbInfoManager.dbSizeGrowthRateMap.size).toLong
       }
       // 确保带宽至少有一个最小值
-      math.max(calculatedBandwidth, defaultBandwidth)
+      math.max(calculatedBandwidth, TimePredictor.defaultBandwidthBps)
     }
 
     // 找出缺失的表
@@ -420,7 +430,7 @@ object TimePredictor {
                 // 计算总等待时间并返回
                 val workingTotalTime = lackTableDownloadTime + remainingWorkTime + containerReturnTimeCost
                 // logging.info(this, s"Predicted total wait time for working container $containerId: $workingTotalTime ms")
-                logging.info(this, s"working container: $containerId, Total predicted wait time: $workingTotalTime = lackTableDownloadTime: $lackTableDownloadTime + remainingWorkTime: $remainingWorkTime")
+                logging.info(this, s"working 态容器: $containerId : 总等待时间($workingTotalTime) = 预计剩余执行时间($predictWorkingTime) + 缺失表加载时间($lackTableDownloadTime) + 容器返回时间($containerReturnTimeCost)")
                 (containerId, workingTotalTime, false)
               }).orElse {
               logging.error(this, s"Missing data for container $containerId. dbInfo: $info.")
@@ -464,14 +474,31 @@ object TimePredictor {
               // logging.info(this, s"loading container: $containerId, remainingSize: $remainingSize = targetDbSize: $targetDbSize - currentDbSize: $currentDbSize")
 
               // 获取带宽（带宽的单位为字节每秒）
-              val bandwidthBps: Long = ContainerDbInfoManager.dbSizeGrowthRateMap
-                .get(containerId)
-                .map(_.toLong) // 转换为 Long 类型
-                .getOrElse((ContainerDbInfoManager.dbSizeGrowthRateMap.values.sum / ContainerDbInfoManager.dbSizeGrowthRateMap.size).toLong)
+              // val bandwidthBps: Long = ContainerDbInfoManager.dbSizeGrowthRateMap
+              //   .get(containerId)
+              //   .map(_.toLong) // 转换为 Long 类型
+              //   .getOrElse((ContainerDbInfoManager.dbSizeGrowthRateMap.values.sum / ContainerDbInfoManager.dbSizeGrowthRateMap.size).toLong)
+              // 修改loading状态的带宽计算，添加保护机制
+              val bandwidthBps: Long = {
+                val calculatedBandwidth = ContainerDbInfoManager.dbSizeGrowthRateMap
+                  .get(containerId)
+                  .map(_.toLong)
+                  .getOrElse {
+                    if (ContainerDbInfoManager.dbSizeGrowthRateMap.nonEmpty) {
+                      (ContainerDbInfoManager.dbSizeGrowthRateMap.values.sum / ContainerDbInfoManager.dbSizeGrowthRateMap.size).toLong
+                    } else {
+                      TimePredictor.defaultBandwidthBps
+                    }
+                  }
+                
+                // 确保带宽至少有一个最小值
+                math.max(calculatedBandwidth, TimePredictor.defaultBandwidthBps)
+              }
 
               // logging.info(this, s"loading container: $containerId, bandwidth: $bandwidthBps Byte/s")
               // 计算剩余加载时间（秒）
               val remainingLoadTime = remainingSize.toDouble / bandwidthBps
+              logging.info(this, s"loading 态容器 $containerId : 剩余加载时间  $remainingLoadTime = remainingSize: $remainingSize / bandwidthBps: $bandwidthBps")
               val lackTableDownloadTime = predictDownloadTime(tablesNeeded, existingTables, containerId)
               // logging.info(this, s"loading container: $containerId, tablesNeeded: $tablesNeeded, existingTables: $existingTables, lackTableDownloadTime: $lackTableDownloadTime")
 
@@ -485,7 +512,7 @@ object TimePredictor {
                 // 计算容器释放的总预测时间
                 val totalWaitTime = remainingLoadTime + predictWorkingTime + lackTableDownloadTime + containerReturnTimeCost
 
-                logging.info(this, s"loading container :$containerId:  totalWaitTime: $totalWaitTime = remainingLoadTime: $remainingLoadTime + predictWorkingTime: $predictWorkingTime + lackTableDownloadTime: $lackTableDownloadTime + containerReturnTimeCost: $containerReturnTimeCost")
+                logging.info(this, s"loading 态容器 $containerId : 总等待时间($totalWaitTime) = 剩余加载时间($remainingLoadTime) + 预计执行时间($predictWorkingTime) + 缺失表加载时间($lackTableDownloadTime) + 容器返回时间($containerReturnTimeCost)")
 
                 (containerId, totalWaitTime, false)
               }).orElse {

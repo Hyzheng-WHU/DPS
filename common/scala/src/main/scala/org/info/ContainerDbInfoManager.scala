@@ -294,12 +294,12 @@ object ContainerDbInfoManager {
         // logging.info(this, s"${entry.state} 容器 $containerId 上次记录大小: $lastDbSize, 当前大小: $currentDbSize")
       
         // 计算增长速率
-        val growthRate = (currentDbSize - lastDbSize) / dbSizeFlushIntervalSec
+        val growthRate = (currentDbSize - lastDbSize) * 1024 * 1024 / dbSizeFlushIntervalSec
 
         // 更新增长速率映射
         if (growthRate > 0) {
           dbSizeGrowthRateMap = dbSizeGrowthRateMap.updated(containerId, growthRate)
-          // logging.info(this, s"容器 $containerId 的增长速率更新为 $growthRate MB/s")
+          logging.info(this, s"容器 $containerId 的增长速率更新为 $growthRate B/s")
         }
       }
 

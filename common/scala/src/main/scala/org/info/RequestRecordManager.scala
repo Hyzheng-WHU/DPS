@@ -50,7 +50,7 @@ object RequestRecordManager {
   // "none" 、 "km" 、 "random" 、 "redundancy" 、 "total_voc" 、 "voc" 、 "svoc"
 
   // 最低保留热容器数
-  val leastSaveContainers = 2
+  val leastSaveContainers = 7
 
   // 按分钟分桶存储请求记录，用于记录每个新到请求的表情况
   private val requestBuckets = new ConcurrentHashMap[Long, List[RequestRecord]]().asScala
@@ -484,7 +484,7 @@ object ContainerRemoveManager {
     val workingContainerCount = ContainerDbInfoManager.countEntriesByState("working")
     val prewarmContainerCount = ContainerDbInfoManager.countEntriesByState("prewarm")
     
-    logging.info(this, s"当前系统中的容器状态: warm: $warmContainerCount, working: $workingContainerCount, prewarm: $prewarmContainerCount")
+    logging.warn(this, s"当前系统中的容器状态: warm: $warmContainerCount, working: $workingContainerCount, prewarm: $prewarmContainerCount")
 
     // 判断是否存在过多的热容器
     // 条件1：所有时间窗口的请求量都小于热容器数量加预热容器数量（保持原逻辑不变）
@@ -543,6 +543,7 @@ object ContainerRemoveManager {
           0
         case _ => throw new IllegalArgumentException(s"未知的容器移除策略: ${RequestRecordManager.removeStrategy}")
       }
+      logging.warn(this, s"由${RequestRecordManager.removeStrategy}策略移除 $removedCount 个热容器，当前热容器数量: ${warmContainers.length - removedCount}")
       // 更新全局计数器
       proactiveRemovedContainerCount += removedCount
       logging.info(this, s"当前累计主动移除的容器数量: $proactiveRemovedContainerCount")
