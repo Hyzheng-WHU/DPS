@@ -50,7 +50,7 @@ object RequestRecordManager {
   // "none" 、 "km" 、 "random" 、 "redundancy" 、 "total_voc" 、 "voc" 、 "svoc"
 
   // 最低保留热容器数
-  val leastSaveContainers = 7
+  val leastSaveContainers = 5
 
   // 按分钟分桶存储请求记录，用于记录每个新到请求的表情况
   private val requestBuckets = new ConcurrentHashMap[Long, List[RequestRecord]]().asScala
@@ -395,12 +395,20 @@ object ContainerRemoveManager {
 
   // 检查前段时间窗口内的请求，计算请求趋势
   private def checkRequestTrends()(implicit logging: Logging): Unit = {
+    val warmContainerCount = ContainerDbInfoManager.countEntriesByState("warm")
+    val loadingContainerCount = ContainerDbInfoManager.countEntriesByState("loading")
+    val workingContainerCount = ContainerDbInfoManager.countEntriesByState("working")
+    val prewarmContainerCount = ContainerDbInfoManager.countEntriesByState("prewarm")
+    
+    logging.warn(this, s"当前系统中的容器状态: loading: $loadingContainerCount, warm: $warmContainerCount, working: $workingContainerCount")
+
+
     val dbInfo = ContainerDbInfoManager.getDbInfo()
     val warmContainers = dbInfo.values.filter(_.state == "warm").toList
 
     // 热容器数小于最低保留热容器数，直接返回
     if (warmContainers.length <= leastSaveContainers) {
-      logging.debug(this, s"热容器数量 ${warmContainers.length} 小于等于最低保留热容器数 ${leastSaveContainers}，跳过移除操作")
+      logging.info(this, s"热容器数量 ${warmContainers.length} 小于等于最低保留热容器数 ${leastSaveContainers}，跳过移除操作")
       return
     }
 
@@ -480,12 +488,6 @@ object ContainerRemoveManager {
       logging.info(this, s"滑动窗口 $i (过去 $startTime 到 $endTime s) 的请求数量: ${slidingRequestCounts(i)}")
     }
 
-    val warmContainerCount = ContainerDbInfoManager.countEntriesByState("warm")
-    val workingContainerCount = ContainerDbInfoManager.countEntriesByState("working")
-    val prewarmContainerCount = ContainerDbInfoManager.countEntriesByState("prewarm")
-    
-    logging.warn(this, s"当前系统中的容器状态: warm: $warmContainerCount, working: $workingContainerCount, prewarm: $prewarmContainerCount")
-
     // 判断是否存在过多的热容器
     // 条件1：所有时间窗口的请求量都小于热容器数量加预热容器数量（保持原逻辑不变）
     val allWindowsHaveExcessContainers = requestCounts.forall(count => warmContainerCount + prewarmContainerCount > count)
@@ -526,7 +528,7 @@ object ContainerRemoveManager {
     val hasExcessContainers = allWindowsHaveExcessContainers && hasDecreasingTrend && noRecentColdOrWaitingStarts
     
     // 记录判断条件的日志
-    logging.info(this, s"判断条件: 容器数量过多=$allWindowsHaveExcessContainers, 请求下降趋势=$hasDecreasingTrend, 无冷启动请求=$noRecentColdOrWaitingStarts")
+    logging.warn(this, s"判断条件: 容器数量过多=$allWindowsHaveExcessContainers, 请求下降趋势=$hasDecreasingTrend, 无冷启动请求=$noRecentColdOrWaitingStarts")
     
     // 如果有过多的热容器，则释放一些
     if (hasExcessContainers) {

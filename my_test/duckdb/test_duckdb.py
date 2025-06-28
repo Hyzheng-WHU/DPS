@@ -38,7 +38,7 @@ def import_data_from_parquet(conn, table_name, data_file):
 
 def optimize_duckdb_connection(conn):
     """DuckDB连接优化设置"""
-    conn.execute("SET memory_limit='1GB';")
+    conn.execute("SET memory_limit='1.8GB';")
     conn.execute("SET threads=1")
     conn.execute("SET enable_progress_bar=false")
     return conn
@@ -86,6 +86,7 @@ def main(args):
     db_path = f"/db/{db_file}"
     
     sql_file = args.get("sql_file")
+    print(f"query: {sql_file}")
     sql_query_provided = args.get("sql_query")
 
     # 获取SQL语句

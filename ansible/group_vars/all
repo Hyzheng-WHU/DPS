@@ -217,7 +217,7 @@ invoker:
 
   # 注意：改资源之后还需要将前面的 limit_invocations_concurrent 默认值同时修改为最大并发容器数
   # userMemory: "{{ invoker_user_memory | default('24576m') }}"
-  userMemory: "{{ invoker_user_memory | default('46080m') }}"
+  userMemory: "{{ invoker_user_memory | default('61440m') }}"
   userCpus: "{{ invoker_user_cpus | default(30) }}"
 
   # Specify if it is allowed to deploy more than 1 invoker on a single machine.
@@ -228,8 +228,8 @@ invoker:
     become: "{{ invoker_docker_become | default(false) }}"
     runcdir: "{{ invoker_runcdir | default('/run/docker/runtime-runc/moby') }}"
     volumes: "{{ invoker_docker_volumes | default([]) }}"
-  loglevel: "{{ invoker_loglevel | default(whisk_loglevel) | default('INFO') }}"
-  # loglevel: "{{ invoker_loglevel | default(whisk_loglevel) | default('ERROR') }}"
+  # loglevel: "{{ invoker_loglevel | default(whisk_loglevel) | default('INFO') }}"
+  loglevel: "{{ invoker_loglevel | default(whisk_loglevel) | default('ERROR') }}"
   jmxremote:
     jvmArgs: "{% if inventory_hostname in groups['invokers'] %}
     {{ jmx.jvmCommonArgs }} -Djava.rmi.server.hostname={{ invokerHostname }} -Dcom.sun.management.jmxremote.rmi.port={{ jmx.rmiBasePortInvoker + groups['invokers'].index(inventory_hostname) }} -Dcom.sun.management.jmxremote.port={{ jmx.basePortInvoker + groups['invokers'].index(inventory_hostname) }}
@@ -541,9 +541,9 @@ scheduler:
       bindPort: 3551
       # at this moment all schedulers are seed nodes
       seedNodes: "{{ groups['schedulers'] | map('extract', hostvars, 'ansible_host') | list }}"
-  loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('INFO') }}"
+  # loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('INFO') }}"
   # loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('ERROR') }}"
-  # loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('WARN') }}"
+  loglevel: "{{ scheduler_loglevel | default(whisk_loglevel) | default('WARN') }}"
   extraEnv: "{{ scheduler_extraEnv | default({}) }}"
   dataManagementService:
     retryInterval: "{{ scheduler_dataManagementService_retryInterval | default('1 second') }}"

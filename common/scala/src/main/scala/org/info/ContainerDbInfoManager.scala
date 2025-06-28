@@ -596,7 +596,7 @@ import java.io.{File, FileWriter, PrintWriter}
 object ContainerStatsRecorder {
   private val statsFilePath = "/db/container_stats.csv"
   private val scheduler = Executors.newSingleThreadScheduledExecutor()
-  private val recordInterval = 1.seconds
+  private val recordInterval = 0.5.seconds
   private val header = "time,total,warm,working,loading,locked,prewarm"
   private val dateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(java.time.ZoneId.systemDefault())
 

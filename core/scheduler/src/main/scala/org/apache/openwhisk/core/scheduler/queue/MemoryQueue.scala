@@ -1227,7 +1227,8 @@ class MemoryQueue(private val etcdClient: EtcdClient,
   private def handleActivationRequest(request: GetActivation)(implicit tid: TransactionId) = {
     // 判断 request.lastDuration 是否为空
     if (request.lastDuration.isDefined) {
-      // lastDuration不为空，说明该容器是容器运行当前任务完成后发出的，是希望收到一个同同类请求，但是在本架构中并不适合将同名函数发送给他，进入else的流程
+      // lastDuration不为空，说明该消息是某个容器运行完上一个任务完成后发出的，是希望收到一个同类请求。
+      // 这在serverless 函数中是合理的，但是在数据库架构中并不适合将同名函数直接发送给它，因此直接进入else的流程。
       // 如果 request.lastDuration.isDefined，直接调用 pollForActivation
       logging.info(this, s"request.lastDuration: ${request.lastDuration}, 似乎是容器运行任务完成后发出的, 直接进入触发 CancelPoll 的流程")
       
@@ -1306,7 +1307,8 @@ class MemoryQueue(private val etcdClient: EtcdClient,
                     logging.warn(this, s"wait state for creationId: $creationId")
                     false
                   case None =>
-                    logging.warn(this, s"no startInfo of $creationId")
+                    // 可能是某个请求刚到达，还没来得及创建startinfo，对系统应该没有影响（对当前请求的处理没影响）可以不管
+                    logging.info(this, s"no startInfo of $creationId")
                     false
                   case _ =>
                     logging.error(this, s"Unexpected state for creationId: $creationId")
