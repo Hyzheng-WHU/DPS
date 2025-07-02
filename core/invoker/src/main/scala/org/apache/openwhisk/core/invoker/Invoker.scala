@@ -17,6 +17,9 @@
 
 package org.apache.openwhisk.core.invoker
 
+// 容器内存监视器
+import org.apache.openwhisk.core.containerpool.docker.DockerContainerMemoryMonitor
+
 import akka.Done
 import akka.actor.{ActorSystem, CoordinatedShutdown}
 import com.typesafe.config.ConfigValueFactory
@@ -108,6 +111,10 @@ object Invoker {
     implicit val actorSystem: ActorSystem =
       ActorSystem(name = "invoker-actor-system", defaultExecutionContext = Some(ec))
     implicit val logger = new AkkaLogging(akka.event.Logging.getLogger(actorSystem, this))
+
+    // 初始化容器内存监视器
+    DockerContainerMemoryMonitor.start(logger)
+
     val poolConfig: ContainerPoolConfig = loadConfigOrThrow[ContainerPoolConfig](ConfigKeys.containerPool)
     val limitConfig: IntraConcurrencyLimitConfig =
       loadConfigOrThrow[IntraConcurrencyLimitConfig](ConfigKeys.concurrencyLimit)
