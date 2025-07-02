@@ -12,19 +12,27 @@ import java.time.Instant
 
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.StatusCodes
 import akka.actor.ActorSystem
 import akka.stream.Materializer
 import spray.json._
 import scala.util.{Success, Failure, Try}
 import com.typesafe.config.ConfigFactory
 
+
 // 数据模型
 case class UpdateContainerRequest(dbName: String, state: String, workingTimestamp: Double)
+case class MemoryUsageRequest(
+  containerMemoryMap: Map[String, Double], // 容器ID -> 内存使用量(MiB)
+  timestamp: String
+)
 case class UpdateResponse(status: String, message: String)
 
 object HttpJsonProtocol extends DefaultJsonProtocol {
   implicit val updateRequestFormat = jsonFormat3(UpdateContainerRequest)
   implicit val updateResponseFormat = jsonFormat2(UpdateResponse)
+
+  implicit val memoryUsageRequestFormat = jsonFormat2(MemoryUsageRequest)
 }
 
 
@@ -62,37 +70,27 @@ object ContainerDbInfoManagerHttp {
   implicit val executionContext = system.dispatcher
 
   def startHttpServer()(implicit logging: Logging): Unit = {
-    val route =
-      path("dbInfo" / "updateByDbName") { // API 路径
+    val route = concat(
+      // 现有的路由
+      path("dbInfo" / "updateByDbName") {
         post {
-          entity(as[String]) { jsonBody => // 接收 JSON 请求体
-            val parsedRequest = Try(jsonBody.parseJson.convertTo[UpdateContainerRequest]) // 转换为数据模型
-            parsedRequest match {
-              case Success(request) =>
-                // 提取字段
-                val dbName = request.dbName
-                val state = request.state
-                val updateStateTimestamp = request.workingTimestamp
-
-                // 执行业务逻辑
-                if (dbName.nonEmpty && state.nonEmpty) {
-                  ContainerDbInfoManager.updateDbInfoByDbName(dbName, state, updateStateTimestamp)
-                  val response = UpdateResponse("success", s"Container with dbName $dbName updated successfully.")
-                  complete(response.toJson.prettyPrint) // 返回 JSON 响应
-                } else {
-                  val response = UpdateResponse("error", "Missing required fields.")
-                  complete(response.toJson.prettyPrint)
-                }
-
-              case Failure(ex) =>
-                val response = UpdateResponse("error", s"Invalid request: ${ex.getMessage}")
-                complete(response.toJson.prettyPrint)
-            }
+          entity(as[String]) { jsonBody =>
+            handleContainerUpdateRequest(jsonBody)
+          }
+        }
+      },
+      
+      // 新增：内存使用情况报告路由
+      path("container" / "memoryUsage") {
+        post {
+          entity(as[String]) { jsonBody =>
+            handleMemoryUsageRequest(jsonBody)
           }
         }
       }
+    )
     
-    // 监听端口 8090
+    // 监听端口
     Http().newServerAt("0.0.0.0", 6789).bind(route).onComplete {
       case Success(binding) =>
         val address = binding.localAddress
@@ -100,6 +98,43 @@ object ContainerDbInfoManagerHttp {
       case Failure(ex) =>
         logging.error(this, s"Failed to bind HTTP endpoint: ${ex.getMessage}")
         system.terminate()
+    }
+  }
+
+  private def handleContainerUpdateRequest(jsonBody: String)(implicit logging: Logging) = {
+    val parsedRequest = Try(jsonBody.parseJson.convertTo[UpdateContainerRequest])
+    parsedRequest match {
+      case Success(request) =>
+        val dbName = request.dbName
+        val state = request.state
+        val updateStateTimestamp = request.workingTimestamp
+
+        if (dbName.nonEmpty && state.nonEmpty) {
+          ContainerDbInfoManager.updateDbInfoByDbName(dbName, state, updateStateTimestamp)
+          val response = UpdateResponse("success", s"Container with dbName $dbName updated successfully.")
+          complete(response.toJson.prettyPrint)
+        } else {
+          val response = UpdateResponse("error", "Missing required fields.")
+          complete(response.toJson.prettyPrint)
+        }
+
+      case Failure(ex) =>
+        val response = UpdateResponse("error", s"Invalid request: ${ex.getMessage}")
+        complete(response.toJson.prettyPrint)
+    }
+  }
+
+  // 新增：处理内存使用情况的方法
+  private def handleMemoryUsageRequest(jsonBody: String)(implicit logging: Logging) = {
+    val parsedRequest = Try(jsonBody.parseJson.convertTo[MemoryUsageRequest])
+    parsedRequest match {
+      case Success(request) =>
+        ContainerDbInfoManager.updateMemoryUsage(request.containerMemoryMap, request.timestamp)
+        complete(StatusCodes.OK) // 简单返回200状态码
+        
+      case Failure(ex) =>
+        logging.warn(this, s"Invalid memory usage request: ${ex.getMessage}")
+        complete(StatusCodes.BadRequest) // 返回400状态码
     }
   }
 }
@@ -116,13 +151,14 @@ case class ContainerDbInfo(activationId: String,
                           dbSizeLastRecord: Double, // 上次记录时，对应db文件的大小（MB）
                           invoker: String, // 容器所在的invoker
                           useCount: Int, // 容器使用次数
-                          createTimestamp: Double // 创建时间戳
+                          createTimestamp: Double, // 创建时间戳
+                          memoryUsageMiB: Double = 0.0  // 内存使用量(MiB)，默认为0
                           )
 
 // 定义 JsonProtocol
 object ContainerDbInfoJsonProtocol extends DefaultJsonProtocol {
   // 定义 ContainerDbInfo 的 JsonFormat
-  implicit val containerDbInfoFormat: RootJsonFormat[ContainerDbInfo] = jsonFormat12(ContainerDbInfo)
+  implicit val containerDbInfoFormat: RootJsonFormat[ContainerDbInfo] = jsonFormat13(ContainerDbInfo)
 }
 
 object ContainerDbInfoManager {
@@ -269,6 +305,28 @@ object ContainerDbInfoManager {
       dbSizeFlushIntervalSec, // 每次执行间隔
       java.util.concurrent.TimeUnit.SECONDS
     )
+  }
+
+  def updateMemoryUsage(containerMemoryMap: Map[String, Double], timestamp: String)(implicit logging: Logging): Unit = synchronized {
+    containerMemoryMap.foreach { case (dockerContainerId, memoryUsage) =>
+      // 尝试通过docker容器ID找到对应的容器信息
+      // 注意：这里可能需要根据实际的容器ID映射关系来查找
+      cachedDbInfo.find { case (_, info) => 
+        // 假设containerId字段存储的是docker容器ID，或者需要其他映射逻辑
+        info.containerId == dockerContainerId || 
+        info.containerId.contains(dockerContainerId) ||
+        dockerContainerId.contains(info.containerId)
+      } match {
+        case Some((containerId, containerInfo)) =>
+          // 更新内存使用情况
+          val updatedInfo = containerInfo.copy(memoryUsageMiB = memoryUsage)
+          cachedDbInfo = cachedDbInfo.updated(containerId, updatedInfo)
+          logging.info(this, s"Updated memory usage for container $containerId: ${memoryUsage}MiB")
+          
+        case None =>
+          logging.warn(this, s"No container found for docker container ID: $dockerContainerId")
+      }
+    }
   }
 
   // 刷新dbSize逻辑
