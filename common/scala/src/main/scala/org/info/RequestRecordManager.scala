@@ -32,8 +32,8 @@ case class RequestRecord(
 // 请求记录工具函数
 object RequestRecordManager {
   // 采样时间窗口参数
-  val containerCheckIntervalInSec =3
-  val totalTimeWindowInSec = 9
+  val containerCheckIntervalInSec = 2
+  val totalTimeWindowInSec = 6
 
   // 判定请求趋势时，滑动时间窗口参数
   val slidingWindowSizeInSec = 60  // 时间窗口大小（单位：秒）
@@ -47,7 +47,7 @@ object RequestRecordManager {
   val validStatesWhenKM = List("warm", "working")
 
   val removeStrategy = "km"
-  // "none" 、 "km" 、 "random" 、 "redundancy" 、 "total_voc" 、 "voc" 、 "svoc"
+  // "none" 、 "km" 、 "random" 、 "redundancy" 、 "total_voc" 、 "voc" 、 "svoc"、 "rainbowcake"
 
   // 最低保留热容器数
   val leastSaveContainers = 5
@@ -540,6 +540,7 @@ object ContainerRemoveManager {
         case "total_voc" => removeWarmContainersByTotalVoC(allSampledTables)
         case "voc" => removeWarmContainersByVoC(allSampledTables)
         case "svoc" => removeWarmContainersByStrictVoC(allSampledTables)
+        case "rainbowcake" => removeWarmContainersByRainbowCake(allSampledTables)
         case "none" => 
           logging.info(this, "不执行容器移除策略")
           0
@@ -1656,6 +1657,126 @@ object ContainerRemoveManager {
       case Failure(exception) =>
         logging.info(this, s"发送移除请求失败, 容器ID: $containerIdToRemove, 错误信息: ${exception.getMessage}")
     }
+  }
+
+  private def removeWarmContainersByRainbowCake(recentRequestTables: List[List[String]])(implicit logging: Logging): Int = {
+    val dbInfo = ContainerDbInfoManager.getDbInfo()
+    val warmContainers = dbInfo.values.filter(_.state == "warm").toList
+
+    if (warmContainers.isEmpty) {
+      logging.warn(this, "没有warm容器")
+      return 0
+    }
+
+    logging.info(this, s"使用RainbowCake TTL策略检查容器销毁")
+    
+    var removedCount = 0
+    val currentTime = Instant.now.getEpochSecond
+
+    // 对每个warm容器独立计算TTL并决策
+    warmContainers.foreach { container =>
+      val remainingTTL = calculateContainerTTL(container, currentTime)
+      
+      if (remainingTTL <= 0) {
+        // TTL过期，销毁容器
+        logging.info(this, s"Container ${container.containerId} TTL过期，销毁容器")
+        removeContainerById(container.containerId)
+        removedCount += 1
+      } else {
+        logging.info(this, s"Container ${container.containerId} TTL还剩 ${remainingTTL.toInt} 秒")
+      }
+    }
+
+    logging.info(this, s"RainbowCake策略销毁了 $removedCount 个TTL过期的容器")
+    removedCount
+  }
+
+  /**
+  * 计算容器的剩余TTL（基于RainbowCake原文公式）
+  * TTL(k,p) = min{IAT(k,p), β(k)}
+  */
+  private def calculateContainerTTL(container: ContainerDbInfo, currentTime: Long)(implicit logging: Logging): Double = {
+    // 修复类型转换问题
+    val lastUpdateTime = container.updateStateTimestamp.getOrElse(currentTime.toDouble)
+    val idleTime = currentTime.toDouble - lastUpdateTime
+    
+    // 1. 计算IAT (Inter-Arrival Time) 基于容器使用历史
+    val predictedIAT = calculateIAT(container)
+    
+    // 2. 计算成本平衡上界 β
+    val beta = calculateBeta(container)
+    
+    // 3. TTL = min{IAT, β}
+    val ttl = math.min(predictedIAT, beta)
+    
+    // 4. 剩余TTL = TTL - 已空闲时间
+    val remainingTTL = ttl - idleTime
+    
+    logging.info(this, 
+      s"Container ${container.containerId}: " +
+      s"IAT=${predictedIAT.toInt}s, β=${beta.toInt}s, TTL=${ttl.toInt}s, " +
+      s"idle=${idleTime.toInt}s, remaining=${remainingTTL.toInt}s"
+    )
+    
+    remainingTTL
+  }
+
+  /**
+  * 计算预测的下次调用间隔时间（IAT）
+  * 基于论文公式：IAT(k,p) = -ln(1-p) / λ(k)
+  */
+  private def calculateIAT(container: ContainerDbInfo): Double = {
+    val currentTime = Instant.now.getEpochSecond
+    val containerLifetime = math.max(currentTime - container.createTimestamp.toLong, 1L)
+    
+    // 计算调用频率 λ
+    val lambda = container.useCount.toDouble / containerLifetime.toDouble
+    val safeLambda = math.max(lambda, 0.0001) // 避免除零，设置最小频率
+    
+    // 使用0.8的置信度分位数（论文中的设置）
+    val quantile = 0.8
+    val predictedIAT = -math.log(1 - quantile) / safeLambda
+    
+    // 设置合理的上下界
+    math.max(math.min(predictedIAT, 3600.0), 10.0) // 10秒到1小时之间
+  }
+
+  /**
+  * 计算成本平衡上界 β
+  * 基于论文公式：β(k) = (α × t̄(k)) / ((1-α) × m̄(k))
+  */
+  private def calculateBeta(container: ContainerDbInfo)(implicit logging: Logging): Double = {
+    // 论文中的成本权衡参数
+    val alpha = 0.996
+    
+    // 估算启动延迟（秒）
+    val startupLatency = estimateStartupLatency(container)
+    
+    // 内存占用（MB）
+    val memoryFootprint = math.max(container.dbSizeLastRecord, 1.0)
+    
+    // β = (α × 启动成本) / ((1-α) × 内存成本)
+    val beta = (alpha * startupLatency) / ((1 - alpha) * memoryFootprint)
+    
+    // 设置合理的上下界
+    math.max(math.min(beta, 1800.0), 30.0) // 30秒到30分钟之间
+  }
+
+  /**
+  * 估算容器的启动延迟
+  */
+  private def estimateStartupLatency(container: ContainerDbInfo)(implicit logging: Logging): Double = {
+    // 基础容器启动时间
+    val baseStartupTime = TimePredictor.coldStartContainerInitTime
+    
+    // 数据加载时间：直接调用TimePredictor
+    val dataLoadingTime = TimePredictor.predictDownloadTime(
+      neededTables = container.tables,
+      existingTables = List.empty[String], // 冷启动假设没有现有数据
+      containerId = container.containerId
+    )
+    
+    baseStartupTime + dataLoadingTime
   }
 
 }
