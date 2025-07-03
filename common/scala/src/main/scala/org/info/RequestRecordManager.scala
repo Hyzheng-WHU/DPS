@@ -32,8 +32,8 @@ case class RequestRecord(
 // 请求记录工具函数
 object RequestRecordManager {
   // 采样时间窗口参数
-  val containerCheckIntervalInSec = 2
-  val totalTimeWindowInSec = 6
+  val containerCheckIntervalInSec = 3
+  val totalTimeWindowInSec = 9
 
   // 判定请求趋势时，滑动时间窗口参数
   val slidingWindowSizeInSec = 60  // 时间窗口大小（单位：秒）
@@ -46,11 +46,11 @@ object RequestRecordManager {
   // var validStatesWhenKM = List("warm")
   val validStatesWhenKM = List("warm", "working")
 
-  val removeStrategy = "km"
+  val removeStrategy = "none"
   // "none" 、 "km" 、 "random" 、 "redundancy" 、 "total_voc" 、 "voc" 、 "svoc"、 "rainbowcake"
 
   // 最低保留热容器数
-  val leastSaveContainers = 5
+  val leastSaveContainers = 4
 
   // 按分钟分桶存储请求记录，用于记录每个新到请求的表情况
   private val requestBuckets = new ConcurrentHashMap[Long, List[RequestRecord]]().asScala

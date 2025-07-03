@@ -645,7 +645,8 @@ case class ContainerStateStats(
   working: Int,        // working状态的容器数
   loading: Int,        // loading状态的容器数
   locked: Int,         // locked状态的容器数
-  prewarm: Int         // prewarm状态的容器数
+  prewarm: Int,         // prewarm状态的容器数
+  memoryUsage: Double  // 所有容器内存使用量总计(MiB)
 )
 
 import java.io.{File, FileWriter, PrintWriter}
@@ -654,8 +655,8 @@ import java.io.{File, FileWriter, PrintWriter}
 object ContainerStatsRecorder {
   private val statsFilePath = "/db/container_stats.csv"
   private val scheduler = Executors.newSingleThreadScheduledExecutor()
-  private val recordInterval = 0.5.seconds
-  private val header = "time,total,warm,working,loading,locked,prewarm"
+  private val recordInterval = 1.seconds
+  private val header = "time,total,warm,working,loading,locked,prewarm,memoryUsage"
   private val dateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(java.time.ZoneId.systemDefault())
 
   // 使用 volatile 保证多线程可见性
@@ -760,9 +761,9 @@ object ContainerStatsRecorder {
     
     // 使用一次遍历完成所有状态的计数
     val cachedDbInfo = ContainerDbInfoManager.getDbInfo()
-    val counts = cachedDbInfo.values.foldLeft((0, 0, 0, 0, 0)) {
-      case ((warm, working, loading, locked, prewarm), info) =>
-        info.state match {
+    val (counts, totalMemoryUsage) = cachedDbInfo.values.foldLeft(((0, 0, 0, 0, 0), 0.0)) {
+      case (((warm, working, loading, locked, prewarm), memorySum), info) =>
+        val newCounts = info.state match {
           case "warm" => (warm + 1, working, loading, locked, prewarm)
           case "working" => (warm, working + 1, loading, locked, prewarm)
           case "loading" => (warm, working, loading + 1, locked, prewarm)
@@ -770,6 +771,9 @@ object ContainerStatsRecorder {
           case "prewarm" => (warm, working, loading, locked, prewarm + 1)
           case _ => (warm, working, loading, locked, prewarm)
         }
+        // 累加内存使用量
+        val newMemorySum = memorySum + info.memoryUsageMiB
+        (newCounts, newMemorySum)
     }
 
     // 计算总容器数
@@ -782,7 +786,8 @@ object ContainerStatsRecorder {
       counts._2, // working
       counts._3, // loading
       counts._4, // locked
-      counts._5  // prewarm
+      counts._5,  // prewarm
+      totalMemoryUsage // 总内存使用量
     )
   }
 
@@ -794,8 +799,7 @@ object ContainerStatsRecorder {
     // 只在总数不为0时记录
     if (stats.total > 0) {
       // 生成CSV行数据
-      val statsLine = s"${stats.timestamp},${stats.total},${stats.warm},${stats.working},${stats.loading},${stats.locked},${stats.prewarm}"
-      
+      val statsLine = s"${stats.timestamp},${stats.total},${stats.warm},${stats.working},${stats.loading},${stats.locked},${stats.prewarm},${stats.memoryUsage}"      
       // 追加写入文件
       val writer = new FileWriter(statsFilePath, true)
       try {

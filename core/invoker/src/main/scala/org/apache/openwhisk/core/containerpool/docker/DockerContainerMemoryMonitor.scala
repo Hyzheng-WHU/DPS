@@ -54,7 +54,7 @@ object DockerContainerMemoryMonitor {
     val dbInfoManagerUrl = s"http://$schedulerIP:6789/container/memoryUsage"
     logging.info(this, s"ContainerDbInfoManager URL: $dbInfoManagerUrl")
     
-    system.scheduler.scheduleAtFixedRate(0.seconds, 2.seconds) { () =>
+    system.scheduler.scheduleAtFixedRate(0.seconds, 1.seconds) { () =>
       try {
         import scala.sys.process._
         val output = StatsCmd.!!
