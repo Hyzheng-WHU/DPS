@@ -32,13 +32,13 @@ case class RequestRecord(
 // 请求记录工具函数
 object RequestRecordManager {
   // 采样时间窗口参数
-  val containerCheckIntervalInSec = 3
-  val totalTimeWindowInSec = 9
+  val containerCheckIntervalInSec = 2.5
+  val totalTimeWindowInSec = 7.5
 
   // 判定请求趋势时，滑动时间窗口参数
   val slidingWindowSizeInSec = 60  // 时间窗口大小（单位：秒）
   val slidingStepSizeInSec = 5  // 滑动步长（单位：秒）
-  val triggerThreshold = 12  // 触发条件：连续多少个滑动窗口下降或持平
+  val triggerThreshold = 16  // 触发条件：连续多少个滑动窗口下降或持平
 
   // 定义采样比例数组
   val samplingRatios = Array(0.7, 0.2, 0.1)
@@ -46,11 +46,14 @@ object RequestRecordManager {
   // var validStatesWhenKM = List("warm")
   val validStatesWhenKM = List("warm", "working")
 
-  val removeStrategy = "none"
+  val removeStrategy = "km"
   // "none" 、 "km" 、 "random" 、 "redundancy" 、 "total_voc" 、 "voc" 、 "svoc"、 "rainbowcake"
 
   // 最低保留热容器数
-  val leastSaveContainers = 4
+  val leastSaveContainers = 7
+
+  // 线性回归斜率阈值，只有当斜率小于等于该值时才认为有明显的下降趋势
+  val slopeThreshold = -2.0 
 
   // 按分钟分桶存储请求记录，用于记录每个新到请求的表情况
   private val requestBuckets = new ConcurrentHashMap[Long, List[RequestRecord]]().asScala
@@ -414,8 +417,8 @@ object ContainerRemoveManager {
 
     val now = Instant.now()
     // 保持原有的固定时间窗口逻辑
-    val windowSize = containerCheckIntervalInSec
-    val numWindows = Math.max(1, totalTimeWindowInSec / windowSize)
+    val windowSize = containerCheckIntervalInSec.toLong
+    val numWindows = Math.max(1, (totalTimeWindowInSec / windowSize).toInt)
     logging.info(this, s"总时间窗口大小: $totalTimeWindowInSec s, 时间窗口大小: $windowSize s, 时间窗口数量: $numWindows")
     
     // 验证采样比例数组长度是否与窗口数量匹配
@@ -502,26 +505,58 @@ object ContainerRemoveManager {
       }
     }
 
-    // // 条件2：使用线性回归模型拟合请求趋势，斜率小于等于-1才触发
+
     // // 准备数据用于线性回归：x为窗口索引，y为请求数量
-    // val xValues = (0 until numSlidingWindows).map(_.toDouble).toArray
-    // val yValues = slidingRequestCounts.map(_.toDouble)
-    // // 计算线性回归的斜率
-    // // 使用最小二乘法计算斜率：slope = (n*sum(xy) - sum(x)*sum(y)) / (n*sum(x^2) - (sum(x))^2)
-    // val n = xValues.length
-    // val sumX = xValues.sum
-    // val sumY = yValues.sum
-    // val sumXY = (xValues zip yValues).map { case (x, y) => x * y }.sum
-    // val sumXSquare = xValues.map(x => x * x).sum
-    // val slope = (n * sumXY - sumX * sumY) / (n * sumXSquare - sumX * sumX)
-    // // 记录斜率值
-    // logging.info(this, s"请求趋势的线性拟合斜率: $slope")
-    // // 只有当斜率小于等于-1时才认为有明显的下降趋势
-    // val hasDecreasingTrend = slope <= -1.0
+    // 条件2：使用线性回归模型拟合请求趋势，斜率小于等于-1才触发
+    // 首先检查数据有效性
+    if (slidingRequestCounts.length < 2) {
+      logging.warn(this, s"滑动窗口数据点不足（${slidingRequestCounts.length}），无法进行线性回归")
+      val hasDecreasingTrend = false // 或者使用原来的逻辑
+    } else {
+      // 准备数据用于线性回归：x为窗口索引，y为请求数量
+      val xValues = (0 until numSlidingWindows).map(_.toDouble).toArray
+      val yValues = slidingRequestCounts.map(_.toDouble)
+      
+      // 检查数组长度是否匹配
+      if (xValues.length != yValues.length) {
+        logging.error(this, s"x值长度(${xValues.length})与y值长度(${yValues.length})不匹配")
+        val hasDecreasingTrend = false
+      } else {
+        // 计算线性回归的斜率
+        val n = xValues.length
+        val sumX = xValues.sum
+        val sumY = yValues.sum
+        val sumXY = (xValues zip yValues).map { case (x, y) => x * y }.sum
+        val sumXSquare = xValues.map(x => x * x).sum
+        
+        // 检查分母是否为零
+        val denominator = n * sumXSquare - sumX * sumX
+        if (math.abs(denominator) < 1e-10) {
+          logging.error(this, s"线性回归分母接近零: $denominator，无法计算斜率")
+          val hasDecreasingTrend = false
+        } else {
+          val slope = (n * sumXY - sumX * sumY) / denominator
+          
+          // 检查斜率是否为有效数值
+          if (slope.isNaN || slope.isInfinite) {
+            logging.error(this, s"线性回归斜率计算结果异常: $slope")
+            val hasDecreasingTrend = false
+          } else {
+            // 记录斜率值
+            logging.info(this, s"请求趋势的线性拟合斜率: $slope")
+            // 只有当斜率小于等于-1时才认为有明显的下降趋势
+            val hasDecreasingTrend = slope <= RequestRecordManager.slopeThreshold
+            if (hasDecreasingTrend) {
+              logging.warn(this, s"请求趋势斜率 $slope 小于等于阈值 ${RequestRecordManager.slopeThreshold}，认为有明显下降趋势")
+            }
+          }
+        }
+      }
+    }
 
 
     // 条件3：最近的时间窗口中没有冷启动或等待启动的请求（保持原逻辑不变）
-    val waitAndColdRequestCountLastxSecs = RequestRecordManager.getWaitAndColdRequestCountWithinDuration(now, containerCheckIntervalInSec)
+    val waitAndColdRequestCountLastxSecs = RequestRecordManager.getWaitAndColdRequestCountWithinDuration(now, containerCheckIntervalInSec.toLong)
     val noRecentColdOrWaitingStarts = waitAndColdRequestCountLastxSecs == 0
 
     // 同时满足三个条件
