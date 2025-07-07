@@ -579,7 +579,8 @@ class ContainerManager(jobManagerFactory: ActorRefFactory => ActorRef,
               })
               val isPrewarm = msg.args.exists(_.fields.get("db_file").exists(_.convertTo[String] == "prewarm"))
               val state = if (isPrewarm) "prewarming" else "creating"
-              ContainerDbInfoManager.createDbInfo(msg.creationId.asString, s"${msg.creationId.asString}.db", state, tables, predictWorkingTime)
+              val sqlFile = msg.args.flatMap(_.fields.get("sql_file")).map(_.convertTo[String]).getOrElse("")
+              ContainerDbInfoManager.createDbInfo(msg.creationId.asString, s"${msg.creationId.asString}.db", state, tables, predictWorkingTime, sqlFile)
               StartInfoManager.createStartInfo(msg.creationId.asString, "wait", "wait", s"${msg.creationId.asString}.db", "cold")
             }
             else {
@@ -967,7 +968,8 @@ object ContainerManager {
 
         // 选择等待时间最短的策略，包括冷启动、warm 容器和 working 容器的等待时间
         logging.info(this, s"为 msg creationId: ${msg.creationId.asString} 选择最佳策略...")
-        val optimalStrategy = TimePredictor.predictWaitTimeAndGetOptimal(msg.creationId.asString, tablesNeeded, waitingAWarmContainer)
+        val sqlFile = msg.args.flatMap(_.fields.get("sql_file")).map(_.convertTo[String]).getOrElse("")
+        val optimalStrategy = TimePredictor.predictWaitTimeAndGetOptimal(msg.creationId.asString, tablesNeeded, sqlFile, waitingAWarmContainer)
         logging.info(this, s"${msg.creationId.asString} 选择最佳策略为 $optimalStrategy")
 
         optimalStrategy match {

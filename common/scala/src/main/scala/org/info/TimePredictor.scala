@@ -12,6 +12,7 @@ import java.io.{File, FileWriter, PrintWriter}
 object TimePredictor {
   // 调度器考虑的容器状态列表
   val ConsideredStates: List[String] = List("warm", "working", "loading", "prewarm")
+  // val ConsideredStates: List[String] = List("warm", "working", "loading", "prewarm")
   // List() // 只有冷启动
   // List("warm", "prewarm") // 只有冷热启动
   // List("warm", "working", "loading", "prewarm") // 完全wait
@@ -289,7 +290,7 @@ object TimePredictor {
     // 如果不存在，会直接返回None
   }
 
-  def predictWaitTimeAndGetOptimal(creationId: String, tablesNeeded: List[String], waitingAWarmContainer: Boolean = false)(implicit logging: Logging): (String, Double, Boolean) = synchronized {
+  def predictWaitTimeAndGetOptimal(creationId: String, tablesNeeded: List[String], bindingQuery: String, waitingAWarmContainer: Boolean = false)(implicit logging: Logging): (String, Double, Boolean) = synchronized {
     logging.info(this, s"正在为creationId: $creationId 选择最佳容器")
     val coldStartDownloadTime = predictDownloadTime(tablesNeeded, List.empty[String])
     val coldStartTotalTime = coldStartDownloadTime + coldStartContainerInitTime
@@ -300,7 +301,7 @@ object TimePredictor {
       removeWaitingContainerIds(containerId)
     }
 
-    val containerWaitTimes = predictWaitTime(tablesNeeded, waitingAWarmContainer)
+    val containerWaitTimes = predictWaitTime(tablesNeeded, bindingQuery, waitingAWarmContainer)
     
     // 构建候选策略列表，包括冷启动的总时间
     val candidateStrategies = if (waitingAWarmContainer) {
@@ -380,15 +381,20 @@ object TimePredictor {
   }
 
   // 给newWaitingContainerIds一个默认值，使得当非调度器调用时，可以使用TimePredictor自己持有的值计算更新
-  def predictWaitTime(tablesNeeded: List[String], waitingAWarmContainer: Boolean = false)(implicit logging: Logging): Seq[(String, Double, Boolean)] = synchronized {
+  def predictWaitTime(tablesNeeded: List[String], bindingQuery: String, waitingAWarmContainer: Boolean = false)(implicit logging: Logging): Seq[(String, Double, Boolean)] = synchronized {
     // waitingContainerIds = newWaitingContainerIds
     // 尽量后置dbInfo的读取，防止读到更新前的值
     logging.info(this, s"waitingAWarmContainer: $waitingAWarmContainer")
     val dbInfo = ContainerDbInfoManager.getDbInfo()
     // logging.info(this, s"dbInfo contents: $dbInfo")
 
+    // 首先过滤掉bindingQuery不等于传入的bindingQuery参数的dbinfo项
+    val filteredDbInfo = dbInfo.filter { case (_, info) => 
+      info.bindingQuery == bindingQuery 
+    }
+
     // 遍历 dbInfo 中的所有容器
-    val containerWaitTimes = dbInfo.flatMap {
+    val containerWaitTimes = filteredDbInfo.flatMap {
       case (containerId, info) =>
         // 检查是否在 waitingQueue 中，如果是则跳过
         if (waitingContainerIds.contains(containerId)) {

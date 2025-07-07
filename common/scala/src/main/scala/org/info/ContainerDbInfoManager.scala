@@ -147,18 +147,19 @@ case class ContainerDbInfo(activationId: String,
                           tables: List[String], // 当前msg中SQL涉及的的table名
                           state: String, // 容器当前状态，有 warm 、loading 、working 三种状态
                           updateStateTimestamp: Option[Double], // 容器进入 working 状态的时间戳，用于计算容器已经进行SQL的时间
-                          predictWorkingTime: Option[Double],       // 预测SQL执行时间，以秒为单位
+                          predictWorkingTime: Option[Double], // 预测SQL执行时间，以秒为单位
                           dbSizeLastRecord: Double, // 上次记录时，对应db文件的大小（MB）
                           invoker: String, // 容器所在的invoker
                           useCount: Int, // 容器使用次数
                           createTimestamp: Double, // 创建时间戳
-                          memoryUsageMiB: Double = 0.0  // 内存使用量(MiB)，默认为0
+                          memoryUsageMiB: Double = 0.0,  // 内存使用量(MiB)，默认为0
+                          bindingQuery: String ="" // 绑定的查询语句，只用于评估query-level
                           )
 
 // 定义 JsonProtocol
 object ContainerDbInfoJsonProtocol extends DefaultJsonProtocol {
   // 定义 ContainerDbInfo 的 JsonFormat
-  implicit val containerDbInfoFormat: RootJsonFormat[ContainerDbInfo] = jsonFormat13(ContainerDbInfo)
+  implicit val containerDbInfoFormat: RootJsonFormat[ContainerDbInfo] = jsonFormat14(ContainerDbInfo)
 }
 
 object ContainerDbInfoManager {
@@ -415,7 +416,7 @@ object ContainerDbInfoManager {
   }
 
   // 创建新的dbInfo条目
-  def createDbInfo(creationId: String, dbFile: String, state: String, tables: List[String], predictWorkingTime: Option[Double])(implicit logging: Logging): Unit = synchronized {
+  def createDbInfo(creationId: String, dbFile: String, state: String, tables: List[String], predictWorkingTime: Option[Double], bindingQuery: String)(implicit logging: Logging): Unit = synchronized {
     val activationId = " wait "
     val containerId = " wait "
     val updateStateTimestamp: Option[Double] = Some(Instant.now.getEpochSecond)
@@ -424,7 +425,7 @@ object ContainerDbInfoManager {
     val invoker = "invoker0"
     val useCount = 0
     val createTimestamp = Instant.now.getEpochSecond
-    cachedDbInfo = cachedDbInfo + (creationId -> ContainerDbInfo(activationId, creationId, containerId, dbFile, tables, state, updateStateTimestamp, predictWorkingTime, dbSizeLastRecord, invoker, useCount, createTimestamp))
+    cachedDbInfo = cachedDbInfo + (creationId -> ContainerDbInfo(activationId, creationId, containerId, dbFile, tables, state, updateStateTimestamp, predictWorkingTime, dbSizeLastRecord, invoker, useCount, createTimestamp, 0.0, bindingQuery))
     logging.info(this, s"New dbInfo created, new creationId: $creationId")
   }
 

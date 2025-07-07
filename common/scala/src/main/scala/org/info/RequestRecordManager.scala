@@ -32,13 +32,13 @@ case class RequestRecord(
 // 请求记录工具函数
 object RequestRecordManager {
   // 采样时间窗口参数
-  val containerCheckIntervalInSec = 2.5
-  val totalTimeWindowInSec = 7.5
+  val containerCheckIntervalInSec = 3
+  val totalTimeWindowInSec = 9
 
   // 判定请求趋势时，滑动时间窗口参数
   val slidingWindowSizeInSec = 60  // 时间窗口大小（单位：秒）
   val slidingStepSizeInSec = 5  // 滑动步长（单位：秒）
-  val triggerThreshold = 16  // 触发条件：连续多少个滑动窗口下降或持平
+  val triggerThreshold = 12  // 触发条件：连续多少个滑动窗口下降或持平
 
   // 定义采样比例数组
   val samplingRatios = Array(0.7, 0.2, 0.1)
@@ -46,7 +46,7 @@ object RequestRecordManager {
   // var validStatesWhenKM = List("warm")
   val validStatesWhenKM = List("warm", "working")
 
-  val removeStrategy = "rainbowcake"
+  val removeStrategy = "none"
   // "none" 、 "km" 、 "random" 、 "redundancy" 、 "total_voc" 、 "voc" 、 "svoc"、 "rainbowcake"
 
   // 最低保留热容器数
@@ -1841,7 +1841,7 @@ object KM{
     // 遍历每个请求，调用 TimePredictor 计算代价
     for (i <- requests.indices) {
       val tablesNeeded = requests(i)
-      val costs = TimePredictor.predictWaitTime(tablesNeeded) // 调用预测时间
+      val costs = TimePredictor.predictWaitTime(tablesNeeded, "") // 调用预测时间
       logging.info(this, s"Request $i costs: $costs")
 
       // 填充代价矩阵
