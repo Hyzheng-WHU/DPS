@@ -1,1 +1,1 @@
-wsk action update test_duckdb -i --docker hyzhengwhu/duckdb_python3action ./my_test/duckdb/test_duckdb.py -t 300000 -m 1536
+wsk action update test_duckdb -i --docker hyzhengwhu/duckdb_python3action ./my_test/duckdb/test_duckdb.py -t 300000 -m 2048
