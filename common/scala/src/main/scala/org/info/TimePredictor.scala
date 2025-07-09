@@ -78,15 +78,15 @@ object TimePredictor {
   //   "web_site" -> 8726L
   // )
 
-  val Tpch5gParquetSize: Map[String, Long] = Map(
-    "customer" -> 51904512L,
-    "lineitem" -> 854601728L,
-    "nation"   -> 1060864L,
-    "orders"   -> 217329664L,
-    "partsupp" -> 176959488L,
-    "part"     -> 25440256L,
-    "region"   -> 1060864L,
-    "supplier" -> 4206592L,
+    val Tpch5gParquetSize: Map[String, Long] = Map(
+    "customer" -> 63174135L,
+    "lineitem" -> 1356111893L,
+    "nation"   -> 2319L,
+    "orders"   -> 308705060L,
+    "partsupp" -> 226757651L,
+    "part"     -> 34740363L,
+    "region"   -> 1005L,
+    "supplier" -> 4021119L,
   )
 
   val TargetBenchmark = Tpch5gParquetSize
