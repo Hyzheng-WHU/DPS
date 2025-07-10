@@ -346,6 +346,8 @@
     env: "{{ env }}"
     volumes: "{{ scheduler_volumes }}"
     ports: "{{ ports_to_expose }}"
+    cpu_quota: 200000  # 限制为2核心 (200000 = 2 * 100000)
+    cpu_period: 100000 # 默认周期为100ms
     command:
       /bin/sh -c
       "exec /init.sh {{ scheduler_index }}

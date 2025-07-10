@@ -169,6 +169,7 @@ object ContainerDbInfoManager {
   private val idleTimeFilePath = "/db/container_idle_times.csv"
 
   private val dbInfoFilePath = "/db/container_db_info.json"
+  private val dbInfoFileExamplePath = "/db/container_db_info_example.json"
 
   // 内存缓存，初始为空
   @volatile private var cachedDbInfo: Map[String, ContainerDbInfo] = Map.empty
@@ -182,6 +183,16 @@ object ContainerDbInfoManager {
 
   // 用于定期刷新缓存到磁盘的线程池
   private val scheduler = Executors.newSingleThreadScheduledExecutor()
+
+  // 从磁盘加载数据到内存缓存
+  private def loadCacheFromDisk()(implicit logging: Logging): Unit = {
+    logging.info(this, "Loading dbInfo from disk to memory cache...")
+    cachedDbInfo = readDbInfo()
+    logging.info(this, s"Loaded ${cachedDbInfo.size} container entries from disk to cache")
+    if (cachedDbInfo.nonEmpty) {
+      logging.info(this, s"Sample entries: ${cachedDbInfo.take(3).map { case (id, info) => s"$id -> ${info.dbName}(${info.state})" }.mkString(", ")}")
+    }
+  }
 
   private def initIdleTimeRecorder()(implicit logging: Logging): Unit = {
     logging.info(this, "正在初始化idle时间记录器...")
@@ -255,7 +266,7 @@ object ContainerDbInfoManager {
   // 初始化方法
   def init()(implicit logging: Logging): Unit = {
     logging.info(this, "Initializing ContainerDbInfoManager...")
-    // loadCacheFromDisk() // 从磁盘加载数据到缓存
+    loadCacheFromDisk() // 从磁盘加载数据到缓存
     startPeriodicFlush() // 启动定期刷新任务
     startPeriodicDbSizeRefresh()
     ContainerDbInfoManagerHttp.startHttpServer() // 启动 HTTP 服务
@@ -374,18 +385,18 @@ object ContainerDbInfoManager {
 
   // 从磁盘读取 dbInfo
   private def readDbInfo()(implicit logging: Logging): Map[String, ContainerDbInfo] = {
-    if (!Files.exists(Paths.get(dbInfoFilePath))) {
-      logging.warn(this, s"$dbInfoFilePath does not exist. Returning empty map.")
+    if (!Files.exists(Paths.get(dbInfoFileExamplePath))) {
+      logging.warn(this, s"$dbInfoFileExamplePath does not exist. Returning empty map.")
       Map.empty
     } else {
-      val source = scala.io.Source.fromFile(dbInfoFilePath)
+      val source = scala.io.Source.fromFile(dbInfoFileExamplePath)
       val jsonStr = try source.mkString finally source.close()
       if (jsonStr.trim.isEmpty) {
-        logging.warn(this, s"$dbInfoFilePath is empty. Returning empty map.")
+        logging.warn(this, s"$dbInfoFileExamplePath is empty. Returning empty map.")
         Map.empty
       } else {
         Try(jsonStr.parseJson.convertTo[Map[String, ContainerDbInfo]]).getOrElse {
-          logging.error(this, s"Failed to parse JSON from $dbInfoFilePath. Returning empty map.")
+          logging.error(this, s"Failed to parse JSON from $dbInfoFileExamplePath. Returning empty map.")
           Map.empty
         }
       }

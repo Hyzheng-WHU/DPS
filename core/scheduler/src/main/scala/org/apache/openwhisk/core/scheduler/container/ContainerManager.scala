@@ -263,8 +263,12 @@ class ContainerManager(jobManagerFactory: ActorRefFactory => ActorRef,
   }
 
   // 将调度时间追加到日志文件
-  private def appendToLogFile(creationId: String, schedulingTimeMs: Long): Unit = {
+  private def appendToLogFile(creationId: String, schedulingTimeMs: Long)(implicit logging: Logging): Unit = {
     val writer = new PrintWriter(new FileWriter(scheduleTimePath, true))
+    logging.error(this, s"creationId: ${creationId} 调度完成, 耗时${schedulingTimeMs}ms")
+    if (schedulingTimeMs > 1000){
+      logging.error(this, s"调度耗时过长！！！")
+    }
     try {
       // 每行记录格式：creationId|调度时间
       writer.println(s"$creationId|$schedulingTimeMs")
@@ -967,48 +971,49 @@ object ContainerManager {
         // 选择等待时间最短的策略，包括冷启动、warm 容器和 working 容器的等待时间
         logging.info(this, s"为 msg creationId: ${msg.creationId.asString} 选择最佳策略...")
         val optimalStrategy = TimePredictor.predictWaitTimeAndGetOptimal(msg.creationId.asString, tablesNeeded, waitingAWarmContainer)
-        logging.info(this, s"${msg.creationId.asString} 选择最佳策略为 $optimalStrategy")
+        logging.error(this, s"${msg.creationId.asString} 选择最佳策略为 $optimalStrategy")
 
-        optimalStrategy match {
-          case ("coldStart", _, _) =>
-            RequestRecordManager.addWaitAndColdRequestRecord(msg.creationId.asString, tablesNeeded, "cold")
-            // 如果选择的是冷启动
-            // logging.info(this, s"cold start selected for msg: $msg.")
-            if (waitingAWarmContainer){
-              logging.error(this, s"msg creationId: ${msg.creationId.asString} 所等待的容器已返回, 但决定冷启动!")
-              logging.error(this, s"dbInfo: ${ContainerDbInfoManager.getDbInfo()}")
-            }
-            coldCreations += ((msg, None, None)) // 加入冷启动列表
+        // optimalStrategy match {
+        //   case ("coldStart", _, _) =>
+        //     RequestRecordManager.addWaitAndColdRequestRecord(msg.creationId.asString, tablesNeeded, "cold")
+        //     // 如果选择的是冷启动
+        //     // logging.info(this, s"cold start selected for msg: $msg.")
+        //     if (waitingAWarmContainer){
+        //       logging.error(this, s"msg creationId: ${msg.creationId.asString} 所等待的容器已返回, 但决定冷启动!")
+        //       logging.error(this, s"dbInfo: ${ContainerDbInfoManager.getDbInfo()}")
+        //     }
+        //     coldCreations += ((msg, None, None)) // 加入冷启动列表
 
-          case (optimalContainerId, _, isWarm) =>
-            // 如果选择的不是冷启动，查看是热启动还是等待
-            decideWarmedOrWaiting(msg, optimalContainerId, isWarm)
+        //   case (optimalContainerId, _, isWarm) =>
+        //     // 如果选择的不是冷启动，查看是热启动还是等待
+        //     decideWarmedOrWaiting(msg, optimalContainerId, isWarm)
             
-            // 检查之前的wait调度决策是否合理
-            if (waitingAWarmContainer){
-              if (isWarm){
-                waitingAWarmContainerCreationId -= msg.creationId.asString
-              } else{
-                logging.error(this, s"msg creationId: ${msg.creationId.asString} 所等待的容器已返回, 但选择了一个等待中容器!")
-                logging.error(this, s"dbInfo: ${ContainerDbInfoManager.getDbInfo()}")
-              }
-            }
+        //     // 检查之前的wait调度决策是否合理
+        //     if (waitingAWarmContainer){
+        //       if (isWarm){
+        //         waitingAWarmContainerCreationId -= msg.creationId.asString
+        //       } else{
+        //         logging.error(this, s"msg creationId: ${msg.creationId.asString} 所等待的容器已返回, 但选择了一个等待中容器!")
+        //         logging.error(this, s"dbInfo: ${ContainerDbInfoManager.getDbInfo()}")
+        //       }
+        //     }
 
-            // 对热启动，将状态置为loading
-            if (isWarm){
-              val predictWorkingTime = msg.args.flatMap(obj => obj.fields.get("predict_time") match {
-                case Some(JsNumber(value)) => Some(value.toDouble) // 将 JsValue 提取为 Double
-                case _ => None
-              })
-              ContainerDbInfoManager.updatePredictWorkingTime(optimalContainerId, predictWorkingTime)
-              ContainerDbInfoManager.updateDbInfoTables(optimalContainerId, tablesNeeded)
-            } else {
-              RequestRecordManager.addWaitAndColdRequestRecord(msg.creationId.asString, tablesNeeded, "wait")
-            }
-          }
+        //     // 对热启动，将状态置为loading
+        //     if (isWarm){
+        //       val predictWorkingTime = msg.args.flatMap(obj => obj.fields.get("predict_time") match {
+        //         case Some(JsNumber(value)) => Some(value.toDouble) // 将 JsValue 提取为 Double
+        //         case _ => None
+        //       })
+        //       ContainerDbInfoManager.updatePredictWorkingTime(optimalContainerId, predictWorkingTime)
+        //       ContainerDbInfoManager.updateDbInfoTables(optimalContainerId, tablesNeeded)
+        //     } else {
+        //       RequestRecordManager.addWaitAndColdRequestRecord(msg.creationId.asString, tablesNeeded, "wait")
+        //     }
+        //   }
       }
     }
-    (coldCreations.result(), warmedCreations.result(), waitingCreations.result())
+    // (coldCreations.result(), warmedCreations.result(), waitingCreations.result())
+    (List.empty, List.empty, List.empty)
   }
 
   protected[container] def updateInvokerMemory(invokerId: Int,

@@ -380,8 +380,9 @@ object TimePredictor {
       // 如果选择了warm容器，立即更新状态为locked
       selectedStrategy match {
         case (containerId, time, true) => 
-          ContainerDbInfoManager.updateStateToLocked(containerId)
-          logging.info(this, s"热容器 $containerId 被选中并立即锁定")
+          // ContainerDbInfoManager.updateStateToLocked(containerId)
+          // logging.info(this, s"热容器 $containerId 被选中并立即锁定")
+          logging.info(this, s"热容器 $containerId 被选中")
           // 如果选择了warm容器，计算总waiting时间（如果有）
           calculateAndCleanWaitingTime(creationId)
           
