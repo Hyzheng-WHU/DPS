@@ -215,7 +215,7 @@ class ContainerManager(jobManagerFactory: ActorRefFactory => ActorRef,
   // 记录收到请求的时间
   private val requestTimes = new ConcurrentHashMap[String, Long]()
   // 记录调度时间的文件路径
-  private val scheduleTimePath = "/db/schedule_time.txt"
+  private val scheduleTimePath = "/db/schedule_time.csv"
   
   private val creationJobManager = jobManagerFactory(context)
 
@@ -263,12 +263,11 @@ class ContainerManager(jobManagerFactory: ActorRefFactory => ActorRef,
   }
 
   // 将调度时间追加到日志文件
-  private def appendToLogFile(schedulingTimeMs: Long): Unit = {
+  private def appendToLogFile(creationId: String, schedulingTimeMs: Long): Unit = {
     val writer = new PrintWriter(new FileWriter(scheduleTimePath, true))
     try {
-      // 追加逗号和时间值到文件末尾
-      writer.print(s"$schedulingTimeMs,")
-      // 不换行，直接刷新
+      // 每行记录格式：creationId|调度时间
+      writer.println(s"$creationId|$schedulingTimeMs")
       writer.flush()
     } finally {
       writer.close()
@@ -647,8 +646,8 @@ class ContainerManager(jobManagerFactory: ActorRefFactory => ActorRef,
             val currentTimeMs = System.currentTimeMillis()
             val schedulingTimeMs = currentTimeMs - receiveTime
             
-            // 将调度时间写入文件
-            appendToLogFile(schedulingTimeMs)
+            // 将调度时间写入文件，传递creationId和调度时间
+            appendToLogFile(requestId, schedulingTimeMs)
           }
         }
       }

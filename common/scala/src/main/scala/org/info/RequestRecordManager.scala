@@ -32,8 +32,8 @@ case class RequestRecord(
 // 请求记录工具函数
 object RequestRecordManager {
   // 采样时间窗口参数
-  val containerCheckIntervalInSec = 4
-  val totalTimeWindowInSec = 12
+  val containerCheckIntervalInSec = 2
+  val totalTimeWindowInSec = 6
 
   // 判定请求趋势时，滑动时间窗口参数
   val slidingWindowSizeInSec = 60  // 时间窗口大小（单位：秒）
@@ -46,11 +46,11 @@ object RequestRecordManager {
   // var validStatesWhenKM = List("warm")
   val validStatesWhenKM = List("warm", "working")
 
-  val removeStrategy = "km"
+  val removeStrategy = "none"
   // "none" 、 "km" 、 "random" 、 "redundancy" 、 "total_voc" 、 "voc" 、 "svoc"、 "rainbowcake"
 
   // 最低保留热容器数
-  val leastSaveContainers = 6
+  val leastSaveContainers = 4
 
   // 线性回归斜率阈值，只有当斜率小于等于该值时才认为有明显的下降趋势
   val slopeThreshold = -3.0 
@@ -66,7 +66,7 @@ object RequestRecordManager {
   private val recordCreationId: mutable.Set[String] = mutable.Set()
 
   private val request_record: mutable.Map[String, (Instant, List[String], Option[String])] = mutable.Map.empty
-  private val request_record_path = "/db/request_record.txt"
+  private val request_record_path = "/db/request_record.csv"
 
   // 用于定期刷新缓存到磁盘的线程池
   private val scheduler = Executors.newSingleThreadScheduledExecutor()

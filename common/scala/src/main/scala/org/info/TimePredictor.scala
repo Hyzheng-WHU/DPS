@@ -11,8 +11,8 @@ import java.io.{File, FileWriter, PrintWriter}
 
 object TimePredictor {
   // 调度器考虑的容器状态列表
-  val ConsideredStates: List[String] = List("warm", "working", "loading", "prewarm")
-  // val ConsideredStates: List[String] = List("warm", "working", "loading", "prewarm")
+  val ConsideredStates: List[String] = List("warm", "prewarm")
+  // val ConsideredStates: List[String] = List("warm", "prewarm")
   // List() // 只有冷启动
   // List("warm", "prewarm") // 只有冷热启动
   // List("warm", "working", "loading", "prewarm") // 完全wait
