@@ -11,7 +11,7 @@ import java.io.{File, FileWriter, PrintWriter}
 
 object TimePredictor {
   // 调度器考虑的容器状态列表
-  val ConsideredStates: List[String] = List("warm", "prewarm")
+  val ConsideredStates: List[String] = List("warm", "working", "loading", "prewarm")
   // List() // 只有冷启动
   // List("warm", "prewarm") // 只有冷热启动
   // List("warm", "working", "loading", "prewarm") // 完全wait
@@ -110,7 +110,7 @@ object TimePredictor {
     "supplier" -> 4021119L,
   )
 
-  val TargetBenchmark = Tpch5gParquetSize
+  val TargetBenchmark = Tpch1gParquetSize
 
   def initWaitingTimeRecorder()(implicit logging: Logging): Unit = {
     logging.warn(this, s"调度器考虑的容器状态列表: $ConsideredStates")
