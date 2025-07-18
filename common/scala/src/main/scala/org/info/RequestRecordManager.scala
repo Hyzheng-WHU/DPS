@@ -32,13 +32,13 @@ case class RequestRecord(
 // 请求记录工具函数
 object RequestRecordManager {
   // 采样时间窗口参数
-  val containerCheckIntervalInSec = 3
-  val totalTimeWindowInSec = 9
+  val containerCheckIntervalInSec = 2.5
+  val totalTimeWindowInSec = 7.5
 
   // 判定请求趋势时，滑动时间窗口参数
   val slidingWindowSizeInSec = 60  // 时间窗口大小（单位：秒）
   val slidingStepSizeInSec = 5  // 滑动步长（单位：秒）
-  val triggerThreshold = 16  // 触发条件：连续多少个滑动窗口下降或持平
+  val triggerThreshold = 14  // 触发条件：连续多少个滑动窗口下降或持平
 
   // 定义采样比例数组
   val samplingRatios = Array(0.7, 0.2, 0.1)
@@ -50,10 +50,10 @@ object RequestRecordManager {
   // "none" 、 "km" 、 "random" 、 "redundancy" 、 "total_voc" 、 "voc" 、 "svoc"、 "rainbowcake"
 
   // 最低保留热容器数
-  val leastSaveContainers = 4
+  val leastSaveContainers = 6
 
   // 线性回归斜率阈值，只有当斜率小于等于该值时才认为有明显的下降趋势
-  val slopeThreshold = -3.0 
+  val slopeThreshold = -5.0 
 
   // 按分钟分桶存储请求记录，用于记录每个新到请求的表情况
   private val requestBuckets = new ConcurrentHashMap[Long, List[RequestRecord]]().asScala
@@ -497,64 +497,64 @@ object ContainerRemoveManager {
 
     // 条件2：滑动窗口的请求趋势判断（新增的滑动窗口逻辑）
     // 检查所有相邻窗口对是否满足：前一个窗口(较新)的请求量不大于后一个窗口(较旧)的请求量
-    var hasDecreasingTrend = true
-    for (i <- 0 until slidingRequestCounts.length - 1) {
-      // 比较相邻窗口：slidingRequestCounts(i)为较新窗口，slidingRequestCounts(i+1)为较旧窗口
-      if (slidingRequestCounts(i) > slidingRequestCounts(i + 1)) {
-        hasDecreasingTrend = false
-      }
-    }
+    // var hasDecreasingTrend = true
+    // for (i <- 0 until slidingRequestCounts.length - 1) {
+    //   // 比较相邻窗口：slidingRequestCounts(i)为较新窗口，slidingRequestCounts(i+1)为较旧窗口
+    //   if (slidingRequestCounts(i) > slidingRequestCounts(i + 1)) {
+    //     hasDecreasingTrend = false
+    //   }
+    // }
 
 
     // // 准备数据用于线性回归：x为窗口索引，y为请求数量
     // 条件2：使用线性回归模型拟合请求趋势，斜率小于等于-1才触发
     // 首先检查数据有效性
-    // var hasDecreasingTrend = false
+    var hasDecreasingTrend = false
 
-    // if (slidingRequestCounts.length < 2) {
-    //   logging.warn(this, s"滑动窗口数据点不足（${slidingRequestCounts.length}），无法进行线性回归")
-    //   hasDecreasingTrend = false // 赋值而不是声明
-    // } else {
-    //   // 准备数据用于线性回归：x为窗口索引，y为请求数量
-    //   val xValues = (0 until numSlidingWindows).map(_.toDouble).toArray
-    //   val yValues = slidingRequestCounts.map(_.toDouble)
+    if (slidingRequestCounts.length < 2) {
+      logging.warn(this, s"滑动窗口数据点不足（${slidingRequestCounts.length}），无法进行线性回归")
+      hasDecreasingTrend = false // 赋值而不是声明
+    } else {
+      // 准备数据用于线性回归：x为窗口索引，y为请求数量
+      val xValues = (0 until numSlidingWindows).map(_.toDouble).toArray
+      val yValues = slidingRequestCounts.map(_.toDouble)
       
-    //   // 检查数组长度是否匹配
-    //   if (xValues.length != yValues.length) {
-    //     logging.error(this, s"x值长度(${xValues.length})与y值长度(${yValues.length})不匹配")
-    //     hasDecreasingTrend = false
-    //   } else {
-    //     // 计算线性回归的斜率
-    //     val n = xValues.length
-    //     val sumX = xValues.sum
-    //     val sumY = yValues.sum
-    //     val sumXY = (xValues zip yValues).map { case (x, y) => x * y }.sum
-    //     val sumXSquare = xValues.map(x => x * x).sum
+      // 检查数组长度是否匹配
+      if (xValues.length != yValues.length) {
+        logging.error(this, s"x值长度(${xValues.length})与y值长度(${yValues.length})不匹配")
+        hasDecreasingTrend = false
+      } else {
+        // 计算线性回归的斜率
+        val n = xValues.length
+        val sumX = xValues.sum
+        val sumY = yValues.sum
+        val sumXY = (xValues zip yValues).map { case (x, y) => x * y }.sum
+        val sumXSquare = xValues.map(x => x * x).sum
         
-    //     // 检查分母是否为零
-    //     val denominator = n * sumXSquare - sumX * sumX
-    //     if (math.abs(denominator) < 1e-10) {
-    //       logging.error(this, s"线性回归分母接近零: $denominator，无法计算斜率")
-    //       hasDecreasingTrend = false
-    //     } else {
-    //       val slope = (n * sumXY - sumX * sumY) / denominator
+        // 检查分母是否为零
+        val denominator = n * sumXSquare - sumX * sumX
+        if (math.abs(denominator) < 1e-10) {
+          logging.error(this, s"线性回归分母接近零: $denominator，无法计算斜率")
+          hasDecreasingTrend = false
+        } else {
+          val slope = (n * sumXY - sumX * sumY) / denominator
           
-    //       // 检查斜率是否为有效数值
-    //       if (slope.isNaN || slope.isInfinite) {
-    //         logging.error(this, s"线性回归斜率计算结果异常: $slope")
-    //         hasDecreasingTrend = false
-    //       } else {
-    //         // 记录斜率值
-    //         logging.info(this, s"请求趋势的线性拟合斜率: $slope")
-    //         // 只有当斜率小于等于-1时才认为有明显的下降趋势
-    //         hasDecreasingTrend = slope <= RequestRecordManager.slopeThreshold
-    //         if (hasDecreasingTrend) {
-    //           logging.warn(this, s"请求趋势斜率 $slope 小于等于阈值 ${RequestRecordManager.slopeThreshold}，认为有明显下降趋势")
-    //         }
-    //       }
-    //     }
-    //   }
-    // }
+          // 检查斜率是否为有效数值
+          if (slope.isNaN || slope.isInfinite) {
+            logging.error(this, s"线性回归斜率计算结果异常: $slope")
+            hasDecreasingTrend = false
+          } else {
+            // 记录斜率值
+            logging.info(this, s"请求趋势的线性拟合斜率: $slope")
+            // 只有当斜率小于等于-1时才认为有明显的下降趋势
+            hasDecreasingTrend = slope <= RequestRecordManager.slopeThreshold
+            if (hasDecreasingTrend) {
+              logging.warn(this, s"请求趋势斜率 $slope 小于等于阈值 ${RequestRecordManager.slopeThreshold}，认为有明显下降趋势")
+            }
+          }
+        }
+      }
+    }
 
 
     // 条件3：最近的时间窗口中没有冷启动或等待启动的请求（保持原逻辑不变）
@@ -1213,41 +1213,45 @@ object ContainerRemoveManager {
       return 0
     }
 
-    // 首先运行原始算法来获取要移除的容器数量
-    val dbInfoCopy = dbInfo.values.filter(info => info.state == "warm" || info.state == "working").toList
-    val (costMatrix, containerOrder) = KM.buildCostMatrix(recentRequestTables, dbInfoCopy)
-    // 构建容器大小映射和列表
-    val containerSizesMap = containers.map(container => 
-      container.containerId -> Option(container.dbSizeLastRecord).getOrElse(0.0)
-    ).toMap
+    // // 首先运行原始算法来获取要移除的容器数量
+    // val dbInfoCopy = dbInfo.values.filter(info => info.state == "warm" || info.state == "working").toList
+    // val (costMatrix, containerOrder) = KM.buildCostMatrix(recentRequestTables, dbInfoCopy)
+    // // 构建容器大小映射和列表
+    // val containerSizesMap = containers.map(container => 
+    //   container.containerId -> Option(container.dbSizeLastRecord).getOrElse(0.0)
+    // ).toMap
 
-    val containerSizes = containerOrder.map(containerId => 
-      containerSizesMap.getOrElse(containerId, 0.0)
-    )
+    // val containerSizes = containerOrder.map(containerId => 
+    //   containerSizesMap.getOrElse(containerId, 0.0)
+    // )
 
-    // 调用 KM 算法
-    val (matchedPairs, unmatchedContainers) = KM.kuhnMunkres(
-      costMatrix, 
-      recentRequestTables, 
-      containerOrder,
-      containerSizes
-    )
-    val originalRemovalCount = unmatchedContainers
-      .map(containerOrder)
-      .flatMap(containerId => dbInfoCopy.find(_.containerId == containerId))
-      .count(_.state == "warm")
+    // // 调用 KM 算法
+    // val (matchedPairs, unmatchedContainers) = KM.kuhnMunkres(
+    //   costMatrix, 
+    //   recentRequestTables, 
+    //   containerOrder,
+    //   containerSizes
+    // )
+    // val originalRemovalCount = unmatchedContainers
+    //   .map(containerOrder)
+    //   .flatMap(containerId => dbInfoCopy.find(_.containerId == containerId))
+    //   .count(_.state == "warm")
 
-    // 如果原算法不需要移除任何容器，我们也直接返回
-    if (originalRemovalCount == 0) {
-      logging.warn(this, "原算法无需移除容器，Total VoC算法也不执行移除")
-      return 0
-    }
+    // // 如果原算法不需要移除任何容器，我们也直接返回
+    // if (originalRemovalCount == 0) {
+    //   logging.warn(this, "原算法无需移除容器，Total VoC算法也不执行移除")
+    //   return 0
+    // }
 
-    // 计算可以移除的最大容器数量，确保剩余热容器数不低于leastSaveContainers
-    val maxRemovalCount = Math.max(0, warmContainers.size - leastSaveContainers)
+    // // 计算可以移除的最大容器数量，确保剩余热容器数不低于leastSaveContainers
+    // val maxRemovalCount = Math.max(0, warmContainers.size - leastSaveContainers)
     
-    // 确定最终要移除的容器数量，取原始计划和最大可移除数中的较小值
-    val finalRemovalCount = Math.min(originalRemovalCount, maxRemovalCount)
+    // // 确定最终要移除的容器数量，取原始计划和最大可移除数中的较小值
+    // val finalRemovalCount = Math.min(originalRemovalCount, maxRemovalCount)
+
+    // 计算目标热容器数量（等于recentRequestTables的长度）
+    val targetWarmContainers = recentRequestTables.size
+    val finalRemovalCount = warmContainers.size - targetWarmContainers
     
     // 如果没有容器可以移除，直接返回
     if (finalRemovalCount <= 0) {
@@ -1270,7 +1274,7 @@ object ContainerRemoveManager {
     // 输出调试信息
     {
       logging.info(this, "==== Debug Information: Total VoC策略移除决策 ====")
-      logging.info(this, s"原算法决定移除的容器数量: $originalRemovalCount")
+      // logging.info(this, s"原算法决定移除的容器数量: $originalRemovalCount")
       logging.info(this, s"考虑最小热容器阈值 ($leastSaveContainers) 后，实际决定移除: $finalRemovalCount")
       
       // 输出所有warm容器信息及其VoC分数
@@ -1339,41 +1343,45 @@ object ContainerRemoveManager {
       return 0
     }
 
-    // 首先运行原始算法来获取要移除的容器数量
-    val dbInfoCopy = dbInfo.values.filter(info => info.state == "warm" || info.state == "working").toList
-    val (costMatrix, containerOrder) = KM.buildCostMatrix(recentRequestTables, dbInfoCopy)
-    // 构建容器大小映射和列表
-    val containerSizesMap = containers.map(container => 
-      container.containerId -> Option(container.dbSizeLastRecord).getOrElse(0.0)
-    ).toMap
+    // // 首先运行原始算法来获取要移除的容器数量
+    // val dbInfoCopy = dbInfo.values.filter(info => info.state == "warm" || info.state == "working").toList
+    // val (costMatrix, containerOrder) = KM.buildCostMatrix(recentRequestTables, dbInfoCopy)
+    // // 构建容器大小映射和列表
+    // val containerSizesMap = containers.map(container => 
+    //   container.containerId -> Option(container.dbSizeLastRecord).getOrElse(0.0)
+    // ).toMap
 
-    val containerSizes = containerOrder.map(containerId => 
-      containerSizesMap.getOrElse(containerId, 0.0)
-    )
+    // val containerSizes = containerOrder.map(containerId => 
+    //   containerSizesMap.getOrElse(containerId, 0.0)
+    // )
 
-    // 调用 KM 算法
-    val (matchedPairs, unmatchedContainers) = KM.kuhnMunkres(
-      costMatrix, 
-      recentRequestTables, 
-      containerOrder,
-      containerSizes
-    )
-    val originalRemovalCount = unmatchedContainers
-      .map(containerOrder)
-      .flatMap(containerId => dbInfoCopy.find(_.containerId == containerId))
-      .count(_.state == "warm")
+    // // 调用 KM 算法
+    // val (matchedPairs, unmatchedContainers) = KM.kuhnMunkres(
+    //   costMatrix, 
+    //   recentRequestTables, 
+    //   containerOrder,
+    //   containerSizes
+    // )
+    // val originalRemovalCount = unmatchedContainers
+    //   .map(containerOrder)
+    //   .flatMap(containerId => dbInfoCopy.find(_.containerId == containerId))
+    //   .count(_.state == "warm")
 
-    // 如果原算法不需要移除任何容器，我们也直接返回
-    if (originalRemovalCount == 0) {
-      logging.warn(this, "原算法无需移除容器，VoC算法也不执行移除")
-      return 0
-    }
+    // // 如果原算法不需要移除任何容器，我们也直接返回
+    // if (originalRemovalCount == 0) {
+    //   logging.warn(this, "原算法无需移除容器，VoC算法也不执行移除")
+    //   return 0
+    // }
 
-    // 计算可以移除的最大容器数量，确保剩余热容器数不低于leastSaveContainers
-    val maxRemovalCount = Math.max(0, warmContainers.size - leastSaveContainers)
+    // // 计算可以移除的最大容器数量，确保剩余热容器数不低于leastSaveContainers
+    // val maxRemovalCount = Math.max(0, warmContainers.size - leastSaveContainers)
     
-    // 确定最终要移除的容器数量，取原始计划和最大可移除数中的较小值
-    val finalRemovalCount = Math.min(originalRemovalCount, maxRemovalCount)
+    // // 确定最终要移除的容器数量，取原始计划和最大可移除数中的较小值
+    // val finalRemovalCount = Math.min(originalRemovalCount, maxRemovalCount)
+
+    // 计算目标热容器数量（等于recentRequestTables的长度）
+    val targetWarmContainers = recentRequestTables.size
+    val finalRemovalCount = warmContainers.size - targetWarmContainers
     
     // 如果没有容器可以移除，直接返回
     if (finalRemovalCount <= 0) {
@@ -1405,7 +1413,7 @@ object ContainerRemoveManager {
     // 输出调试信息
     {
       logging.info(this, "==== Debug Information: VoC策略移除决策 ====")
-      logging.info(this, s"原算法决定移除的容器数量: $originalRemovalCount")
+      // logging.info(this, s"原算法决定移除的容器数量: $originalRemovalCount")
       logging.info(this, s"考虑最小热容器阈值 ($leastSaveContainers) 后，实际决定移除: $finalRemovalCount")
       
       // 输出所有warm容器信息及其VoC分数

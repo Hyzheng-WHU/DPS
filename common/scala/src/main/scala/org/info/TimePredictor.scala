@@ -110,7 +110,7 @@ object TimePredictor {
     "supplier" -> 4021119L,
   )
 
-  val TargetBenchmark = Tpch1gParquetSize
+  val TargetBenchmark = Tpch5gParquetSize
 
   def initWaitingTimeRecorder()(implicit logging: Logging): Unit = {
     logging.warn(this, s"调度器考虑的容器状态列表: $ConsideredStates")
